@@ -1,17 +1,23 @@
-# EdgeCloud 项目依赖（占位，阶段 0 各模块跑通 baseline 后统一补充）
-#
-# 约定：
-# - 固定版本号（如 torch==2.x.x），避免团队环境不一致
-# - 各模块新增依赖时在下方对应区块登记，并注明用途
-#
-# ---- 公共 ----
-# numpy==
-# pyyaml==
-#
-# ---- 模块 A（轻量化 / AutoTailor / NCNN 部署）----
-#
-# ---- 模块 B（MV-ViT 推理 / Lyapunov Actor-Critic 调度）----
-# torch==
-#
-# ---- 模块 C（持续学习 / DoRA 微调 / 一致性仲裁）----
-# peft==
+# EdgeCloud 项目依赖
+# Python 3.10+
+
+# 深度学习框架
+torch>=2.0.0
+torchvision>=0.15.0
+timm>=0.9.0
+
+# 数据处理
+numpy>=1.24.0
+pandas>=2.0.0
+Pillow>=9.0.0
+
+# 可视化
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# 进度条
+tqdm>=4.65.0
+
+# 可选：模型导出
+# onnx>=1.14.0
+# onnxruntime>=1.15.0
