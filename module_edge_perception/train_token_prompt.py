@@ -14,8 +14,8 @@ from prompt_tuning.prompt_model import PromptGenerator
 
 
 ROOT_DIR = Path(__file__).resolve().parent
-EDGE_RL_DIR = ROOT_DIR / "EdgeCloud_RL"
-sys.path.insert(0, str(EDGE_RL_DIR))
+COMMON_DIR = ROOT_DIR.parent / "common"
+sys.path.insert(0, str(COMMON_DIR))
 
 from drift_dataset import (  # noqa: E402
     DeterministicDriftWrapper,
