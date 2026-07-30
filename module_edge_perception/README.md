@@ -32,6 +32,8 @@ module_edge_perception/
 核心代码由学长提供，位于本地 D:\challenge\Code\code2\，包括：
 - model.py — MV-ViT 模型
 - dataset.py — ModelNet40 数据加载
+- sevd_dataset.py — 第二场景 SEVD 四路同步 RGB + COCO 标注加载
+- test_sevd_inference.py — SEVD 到现有 MV-ViT 的无训练前向链路验证
 - drift_dataset.py — 漂移模拟器
 - prompt_tuning/prompt_model.py — Prompt 生成器
 - train.py / train_retrain_drift.py / train_token_prompt.py — 训练脚本
