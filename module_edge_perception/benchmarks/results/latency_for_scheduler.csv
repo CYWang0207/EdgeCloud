@@ -1,0 +1,13 @@
+model_name,keep_ratio,seq_len,inference_latency_ms,mode
+vit_small_patch16_224,1.0,785,287.0,baseline
+vit_small_patch16_224,0.8,629,227.35,hard_prune
+vit_small_patch16_224,0.6,473,167.79,hard_prune
+vit_small_patch16_224,0.4,317,124.82,hard_prune
+vit_small_patch16_224,0.2,161,73.68,hard_prune
+vit_small_patch16_224,0.1,81,37.84,hard_prune
+vit_tiny_patch16_224,1.0,785,113.21,baseline
+vit_tiny_patch16_224,0.8,629,85.08,hard_prune
+vit_tiny_patch16_224,0.6,473,59.45,hard_prune
+vit_tiny_patch16_224,0.4,317,43.01,hard_prune
+vit_tiny_patch16_224,0.2,161,26.83,hard_prune
+vit_tiny_patch16_224,0.1,81,17.42,hard_prune
