@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import timm
@@ -143,3 +145,152 @@ class EarlyFusionMultiViewViT(nn.Module):
         out = self.head(cls_out)
 
         return out
+
+    def forward_hard_prune(self, x, keep_ratio=1.0, keep_ratios=None,
+                          token_score_mode="importance", prompt_tokens=None):
+        """
+        硬剪枝前向：真正删除被剪 token，缩短序列长度，使 self-attention 复杂度 O(N^2) 真实下降。
+        与 forward() 的软剪枝（mask token 替换）形成对比，用于验证 TTFT 降低。
+
+        x: [B, V, C, H, W]
+        keep_ratio: 标量 float in [0,1]，所有视角统一保留率（benchmark 简化版）
+        keep_ratios: [B, V] 张量，每视角不同保留率（RL 调度对接用）。优先于 keep_ratio。
+        token_score_mode: "random" / "importance"
+        prompt_tokens: optional [B, P, D]
+
+        注意：当 keep_ratios 为 None 且 keep_ratio 为标量时，batch 内序列长度一致可批量处理；
+        当 keep_ratios 指定每视角不同时，各样本序列长度可能不同，逐样本处理。
+        """
+        B, V, C, H, W = x.shape
+        assert V == self.num_views
+
+        # 0. 无需剪枝时直接走原 forward
+        if keep_ratios is None:
+            keep_ratio = float(keep_ratio)
+            if keep_ratio >= 1.0:
+                return self.forward(x, prompt_tokens=prompt_tokens)
+            # 标量统一保留率，走批量路径
+            return self._hard_prune_uniform(x, keep_ratio, token_score_mode, prompt_tokens)
+
+        # 每视角不同的 keep_ratios，走逐样本路径
+        keep_ratios = keep_ratios.to(device=x.device, dtype=torch.float32).clamp(0.0, 1.0)
+        # 若所有视角保留率相同且 >= 1.0，直接走原 forward
+        if torch.all(keep_ratios >= 1.0):
+            return self.forward(x, prompt_tokens=prompt_tokens)
+
+        outputs = []
+        for b in range(B):
+            single_x = x[b:b+1]  # [1, V, C, H, W]
+            single_keep = keep_ratios[b]  # [V]
+            single_prompt = prompt_tokens[b:b+1] if prompt_tokens is not None else None
+            # 逐视角 gather 不同数量的 token，然后拼接
+            out = self._hard_prune_per_sample(single_x, single_keep, token_score_mode, single_prompt)
+            outputs.append(out)
+        return torch.cat(outputs, dim=0)
+
+    def _hard_prune_uniform(self, x, keep_ratio, token_score_mode, prompt_tokens):
+        """标量统一保留率的硬剪枝（批量处理，序列长度一致）。"""
+        B, V, C, H, W = x.shape
+
+        # 1. Patch 提取
+        x = x.view(B * V, C, H, W)
+        x = self.patch_embed(x)
+        _, N, D = x.shape
+        x = x.view(B, V, N, D)
+
+        # 2. 计算保留数量（标量，所有视角统一）
+        keep_count = max(1, int(math.ceil(keep_ratio * N)))
+        keep_count = min(keep_count, N)
+
+        # 3. 按重要性选 top-k token 索引
+        if token_score_mode == "importance":
+            scores = x.detach().norm(dim=-1)
+        elif token_score_mode == "random":
+            scores = torch.rand(B, V, N, device=x.device)
+        else:
+            raise ValueError(f"不支持的 token_score_mode: {token_score_mode}")
+
+        top_idx = torch.topk(scores, keep_count, dim=-1).indices
+        top_idx_sorted, _ = torch.sort(top_idx, dim=-1)
+
+        # 4. 收集保留的 token + 对应位置编码
+        gather_idx = top_idx_sorted.unsqueeze(-1).expand(-1, -1, -1, D)
+        x_keep = torch.gather(x, 2, gather_idx)
+
+        spatial_pe = self.spatial_pos_embed.expand(B, V, N, D)
+        pe_keep = torch.gather(spatial_pe, 2, gather_idx)
+        view_pe = self.view_pos_embed.expand(B, V, keep_count, D)
+
+        x_keep = x_keep + pe_keep + view_pe
+
+        # 5. 拉平成序列
+        x_flat = x_keep.reshape(B, V * keep_count, D)
+
+        # 6. 拼接 CLS + Prompt
+        cls_tokens = self.cls_token.expand(B, -1, -1) + self.cls_pos_embed
+        if prompt_tokens is not None:
+            prompt_tokens = prompt_tokens.to(device=x_flat.device, dtype=x_flat.dtype)
+            x_flat = torch.cat((cls_tokens, prompt_tokens, x_flat), dim=1)
+        else:
+            x_flat = torch.cat((cls_tokens, x_flat), dim=1)
+
+        # 7. Transformer blocks
+        for block in self.blocks:
+            x_flat = block(x_flat)
+
+        x_flat = self.norm(x_flat)
+        return self.head(x_flat[:, 0])
+
+    def _hard_prune_per_sample(self, x, keep_ratios_vec, token_score_mode, prompt_tokens):
+        """每视角不同保留率的硬剪枝（单样本处理，序列长度 = sum(各视角 keep_count)）。
+
+        x: [1, V, C, H, W]
+        keep_ratios_vec: [V] 张量
+        """
+        B, V, C, H, W = x.shape  # B=1
+        x = x.view(B * V, C, H, W)
+        x = self.patch_embed(x)
+        _, N, D = x.shape
+        x = x.view(B, V, N, D)
+
+        # 每视角保留数量
+        keep_counts = torch.ceil(keep_ratios_vec * N).long().clamp(1, N)  # [V]
+
+        # 逐视角 gather
+        kept_tokens = []
+        for v in range(V):
+            kc = int(keep_counts[v].item())
+            xv = x[0, v]  # [N, D]
+            if token_score_mode == "importance":
+                scores_v = xv.detach().norm(dim=-1)  # [N]
+            elif token_score_mode == "random":
+                scores_v = torch.rand(N, device=xv.device)
+            else:
+                raise ValueError(f"不支持的 token_score_mode: {token_score_mode}")
+
+            top_idx = torch.topk(scores_v, kc).indices
+            top_idx_sorted, _ = torch.sort(top_idx)
+            xv_keep = xv[top_idx_sorted]  # [kc, D]
+
+            # 对应位置编码
+            pe_v = self.spatial_pos_embed[0, 0, top_idx_sorted]  # [kc, D]
+            view_pe_v = self.view_pos_embed[0, v].expand(kc, D)
+            xv_keep = xv_keep + pe_v + view_pe_v
+            kept_tokens.append(xv_keep)
+
+        # 拼接所有视角的保留 token
+        x_flat = torch.cat(kept_tokens, dim=0).unsqueeze(0)  # [1, sum_kc, D]
+
+        # 拼接 CLS + Prompt
+        cls_tokens = self.cls_token.expand(B, -1, -1) + self.cls_pos_embed
+        if prompt_tokens is not None:
+            prompt_tokens = prompt_tokens.to(device=x_flat.device, dtype=x_flat.dtype)
+            x_flat = torch.cat((cls_tokens, prompt_tokens, x_flat), dim=1)
+        else:
+            x_flat = torch.cat((cls_tokens, x_flat), dim=1)
+
+        for block in self.blocks:
+            x_flat = block(x_flat)
+
+        x_flat = self.norm(x_flat)
+        return self.head(x_flat[:, 0])

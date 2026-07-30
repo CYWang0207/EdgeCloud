@@ -1,0 +1,5 @@
+mode,keep_ratio,seq_len,median_ms,p95_ms,ttft_drop_pct,memory_gb,memory_inference_mb,memory_ok,accuracy,params_m
+baseline,1.0,785,453.67,634.68,0.0,0.081,0.2,True,N/A,21.7
+hard_prune,0.4,317,135.19,170.65,70.2,0.0808,0.0,True,N/A,21.7
+hard_prune,0.2,161,79.15,86.01,82.6,0.0808,0.0,True,N/A,21.7
+hard_prune,0.1,81,43.6,59.3,90.4,0.0808,0.0,True,N/A,21.7
