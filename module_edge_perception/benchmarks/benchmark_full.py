@@ -7,7 +7,7 @@
 
 支持两个场景：
   --scene modelnet40  （场景1，40类分类）
-  --scene sevd         （场景2，6类检测/分类）
+  --scene boxcars      （场景2，BoxCars116k 多视图车辆分类）
 
 用法（从 module_edge_perception/ 目录运行）：
     # 随机数据模式（本地演示）
@@ -19,8 +19,9 @@
         --dataset-path ../data/modelnet40v2png_ori4 --checkpoint models/mv_vit_best.pth
 
     # 真实数据模式（服务器，场景2）
-    py -3.11 benchmarks/benchmark_full.py --scene sevd \
-        --dataset-path ../data/SEVD --checkpoint models/mv_vit_sevd.pth
+    py -3.11 benchmarks/benchmark_full.py --scene boxcars \
+        --dataset-path ../data/BoxCars116k_kaggle/BoxCars116k \
+        --boxcars-task make --checkpoint models/mv_vit_boxcars_make.pth
 
 输出：
     benchmarks/results/full_benchmark_<model>_<scene>.csv
@@ -142,15 +143,18 @@ def build_dataloader(args):
         )
         num_classes = 40
         collate = None
-    elif args.scene == "sevd":
-        # 场景2：SEVD 四路交通摄像头
-        from sevd_dataset import SEVD_CLASSES, SEVDMultiView
-        dataset = SEVDMultiView(
-            root_dir=args.dataset_path, split="test", transform=transform,
-            scenes=tuple(args.scenes) if args.scenes else None,
+    elif args.scene == "boxcars":
+        # 场景2：同一车辆轨迹的四个分散观测，默认做 16 类品牌识别
+        from boxcars_dataset import BoxCarsMultiView
+        dataset = BoxCarsMultiView(
+            root_dir=args.dataset_path,
+            split="test",
+            task=args.boxcars_task,
+            num_views=args.num_views,
+            transform=transform,
         )
-        num_classes = len(SEVD_CLASSES)
-        collate = dataset.collate_fn
+        num_classes = len(dataset.classes)
+        collate = None
     else:
         raise ValueError(f"未知场景: {args.scene}")
 
@@ -165,7 +169,7 @@ def get_batch(loader, device, num_views):
     """从 loader 取一个 batch，返回 images [B, V, 3, 224, 224]。"""
     batch = next(iter(loader))
     if isinstance(batch, (list, tuple)):
-        images = batch[0]  # (views, targets, metadata) 或 (images, labels)
+        images = batch[0]
     else:
         images = batch
     if images.dim() == 5 and images.shape[1] != num_views:
@@ -191,12 +195,12 @@ def measure_accuracy(model, loader, device, keep_ratio, num_classes, max_batches
                 break
             if isinstance(batch, (list, tuple)):
                 images = batch[0]
-                labels = batch[1] if len(batch) > 1 else None
+                # BoxCars: (images, view_mask, labels, metadata)
+                labels = batch[2] if len(batch) == 4 else batch[1]
             else:
                 images = batch
                 labels = None
 
-            # SEVD 的 batch 是 (views, targets, metadata)，无分类标签
             if labels is None or not torch.is_tensor(labels):
                 # 无分类标签，跳过精度测量
                 return None
@@ -224,7 +228,7 @@ def parse_args():
     p = argparse.ArgumentParser(description="一体化评测：精度+延迟+内存")
     p.add_argument("--model-name", default="vit_small_patch16_224",
                    choices=["vit_small_patch16_224", "vit_tiny_patch16_224"])
-    p.add_argument("--scene", default="modelnet40", choices=["modelnet40", "sevd"])
+    p.add_argument("--scene", default="modelnet40", choices=["modelnet40", "boxcars"])
     p.add_argument("--num-views", type=int, default=4)
     p.add_argument("--num-classes", type=int, default=40)
     p.add_argument("--batch-size", type=int, default=2)
@@ -233,7 +237,9 @@ def parse_args():
     p.add_argument("--keep-ratios", default="1.0,0.4,0.2,0.1")
     p.add_argument("--dataset-path", default=None, help="数据集路径（不填则用随机数据）")
     p.add_argument("--checkpoint", default=None, help="模型权重路径（不填则随机权重）")
-    p.add_argument("--scenes", nargs="*", default=None, help="SEVD 场景列表")
+    p.add_argument("--boxcars-task", default="make",
+                   choices=["make", "body", "medium", "hard"],
+                   help="BoxCars116k 官方分类任务；第一版推荐 make（16 类品牌）")
     p.add_argument("--num-workers", type=int, default=0)
     p.add_argument("--max-accuracy-batches", type=int, default=None,
                    help="精度测量最大 batch 数（不填则全量）")

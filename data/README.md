@@ -1,80 +1,144 @@
-# data · 数据集目录（内容不进 Git）
+# data · 数据集目录（真实数据不进 Git）
 
-**真实数据集不进 Git 仓库**（体积过大），本目录在仓库中只保留本说明文件。
+本目录只提交说明文件。数据集、解压文件、生成的索引和模型权重均由
+`.gitignore` 排除，禁止提交到仓库。
 
-## 使用方式
-
-1. 按下文链接下载所需数据集。
-2. 解压到本目录下，例如：
-
-```
-data/
-├── README.md        # 本文件（唯一进 Git 的文件）
-├── modelnet40v2png_ori4/  # 场景 1：ModelNet40 四视角分类
-└── SEVD/                    # 场景 2：四路固定交通摄像头感知
-```
-
-`.gitignore` 已配置忽略本目录下除 README 外的所有内容，正常 `git add .` 不会误传数据。
-
-## 场景 2：SEVD Fixed Perception RGB
-
-SEVD 是公开的 CARLA 合成自动驾驶多模态数据集。项目第二场景只使用其中四路
-固定摄像头的同步 RGB 与 2D 标注，适配多视角边缘感知、视角选择、Token 剪枝
-和场景漂移实验。原始来源：
-
-- 项目页：https://eventbasedvision.github.io/SEVD/
-- 论文：https://arxiv.org/abs/2404.10540
-- 官方代码：https://github.com/eventbasedvision/SEVD
-- 本项目使用的数据下载目录：https://www.dropbox.com/scl/fo/mhn4ykfhlk3as46sg8mhs/AB_LqoZeea2yjESIoa3B2Ps?rlkey=fq4t643tc6q6p0b85aj2p7a3o&dl=0
-
-可从官方下载链接获取。当前服务器已整理到：
+## 两个应用场景
 
 ```text
-/root/autodl-tmp/SEVD/
-├── scene_002/organized/
-├── scene_003/organized/
-├── scene_030/organized/
-└── scene_032/organized/
+data/
+├── README.md
+├── modelnet40v2png_ori4/                 # 场景 1：四视角 3D 物体分类
+└── BoxCars116k_kaggle/
+    ├── BoxCars116k.zip                   # 原始压缩包，约 6.1 GB
+    └── BoxCars116k/                      # 场景 2：监控车辆多视图分类
+        ├── images/
+        ├── json_data/
+        │   ├── dataset.json
+        │   ├── classification_splits.json
+        │   └── verification_splits.json
+        ├── matlab_data/
+        ├── dataset.pkl
+        └── INFO.txt
 ```
 
-每个 `organized/` 均包含 `metadata.json` 和 `camera_01` 至 `camera_04`；每路
-相机包含 `images/*.png` 与 `annotations/coco.json`。同名 PNG 是同一个同步
-时刻。整理后共有 5704 个四视角时刻、22816 张 RGB 图像，约 36 GB；类别为
-`car`、`truck`、`van`、`pedestrian`、`motorcycle`、`bicycle`。
+服务器上的实际路径为：
 
-如需放在仓库目录，保持同样结构复制或软链接到 `data/SEVD`。不要提交真实数据。
+```text
+/root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k
+```
 
-DataLoader 位于 `module_edge_perception/sevd_dataset.py`：
+## 场景 2：BoxCars116k 交通监控车辆识别
+
+第二场景已经从 SEVD 调整为 BoxCars116k。该数据集包含 27,496 辆独立车辆的
+116,286 张监控裁剪图、693 个细粒度车型标签；服务器解压目录约 9.2 GB。
+`images/` 下还为每张图保存一个 `_mask.png`，因此直接统计 PNG 会得到
+232,572 个文件，训练图像数仍是 116,286。
+
+- 官方项目与格式说明：https://github.com/JakubSochor/BoxCars
+- 数据集论文：https://arxiv.org/abs/1703.00686
+
+### 项目中的任务定义
+
+第一版采用官方 `make` 划分做 **16 类车辆品牌识别**，而不是直接训练长尾明显的
+693 个细粒度类别。官方划分按摄像头隔离训练集和测试集，比自行随机切分图片更能
+检验跨摄像头泛化，也避免同一轨迹泄漏到不同集合。
+
+BoxCars116k 的真实采集方式必须说明清楚：同一 `vehicle_id` 是一辆车在**同一个
+物理交通摄像头**下形成的一段轨迹，数据集不提供跨摄像头车辆身份关联。因此项目
+不能声称四个物理摄像头同时看见同一辆车。这里把一条轨迹中时间跨度尽可能大的
+四张裁剪图作为四个逻辑视图：
 
 ```python
-from module_edge_perception.sevd_dataset import SEVDMultiView
+views, view_mask, label, metadata = dataset[index]
 
-dataset = SEVDMultiView("data/SEVD", split="train", transform=transform)
-views, targets, metadata = dataset[0]
-# views.shape == [4, 3, H, W]
+views.shape     # [4, 3, 224, 224]
+view_mask.shape # [4]，真实图像为 1，补齐位置为 0
+label           # 品牌类别索引，默认 0–15
 ```
 
-`train/val/test` 在每个场景内按同步时刻顺序切分为 70%/15%/15%，不可按单路
-图片随机切分。检测框按相机保留在 `targets` 中，类别标签沿用原 COCO 文件的
-`category_id` 1–6（0 保留为背景）。当前 `transform` 只变换图像；若后续训练
-检测头并使用会改变几何尺寸的增强，需要同步变换 `targets[view]["boxes"]`。
+抽样规则为首帧到末帧之间等间隔取 4 张，以获得车辆尺度、位置和可见面的最大变化。
+若轨迹少于 4 张，保留全部真实图像并重复末张图补齐张量，同时将补齐位置的
+`view_mask` 设为 0。模型已有 missing-view token，可用该掩码模拟摄像头缺失；
+雨雾、明暗、模糊、遮挡等环境变化继续由漂移模块在线合成，不伪造数据集原本没有
+的天气标签。
 
-在服务器上验证真实数据和现有 MV-ViT 前向链路：
+这种定义与项目目标的对应关系是：
+
+- 多视图融合：融合同一车辆轨迹中不同时间、尺度和可见面的观测；
+- Token 剪枝：对四个逻辑视图的 patch token 动态保留；
+- 视图选择：根据 `view_mask` 和调度动作关闭低价值或故障视图；
+- 场景漂移：在输入图像上模拟光照、雨雾、模糊、遮挡和设备故障；
+- 输出任务：品牌分类，后续再评估 `medium`（79 类）或 `hard`（107 类）车型任务。
+
+## DataLoader
+
+加载器位于 `module_edge_perception/boxcars_dataset.py`：
+
+```python
+from module_edge_perception.boxcars_dataset import BoxCarsMultiView
+
+dataset = BoxCarsMultiView(
+    root_dir="data/BoxCars116k_kaggle/BoxCars116k",
+    split="train",          # train / validation / test
+    task="make",            # make / body / medium / hard
+    num_views=4,
+    transform=transform,
+)
+views, view_mask, label, metadata = dataset[0]
+```
+
+官方分类任务规模如下（数量单位为车辆轨迹）：
+
+| 任务 | 类别数 | train | validation | test | 用途 |
+|---|---:|---:|---:|---:|---|
+| `make` | 16 | 13,098 | 649 | 12,322 | 第一版品牌分类，推荐 |
+| `body` | 6 | 13,432 | 771 | 12,650 | 车身类型分类 |
+| `medium` | 79 | 12,084 | 611 | 11,456 | 中等粒度车型分类 |
+| `hard` | 107 | 11,653 | 637 | 11,125 | 较细粒度车型分类 |
+
+不要自行按单张图片随机切分，也不要把 `_mask.png` 当作 RGB 输入。
+
+## 服务器验证
+
+从感知模块目录运行：
 
 ```bash
-cd /path/to/EdgeCloud/module_edge_perception
-/root/miniconda3/bin/python test_sevd_inference.py \
-  --dataset-path /root/autodl-tmp/SEVD --scene scene_030
+cd /root/autodl-tmp/EdgeCloud/module_edge_perception
+/root/miniconda3/bin/python test_boxcars_inference.py \
+  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+  --task make --split test
 ```
 
-该命令不训练、不下载权重；6 类分类头为随机初始化，只用于确认 DataLoader 的
-图像张量能通过现有模型。原始 COCO 目标仍然保留，后续若做目标检测应接检测头，
-不能把该随机分类输出当作检测精度结论。
+该命令只验证真实 DataLoader、`view_mask` 和 MV-ViT 前向链路，不训练模型；随机
+初始化分类头的输出不能作为识别精度。正式精度评测必须加载 BoxCars116k 训练得到
+的 checkpoint。
 
-### 已验证结论（2026-07-30）
+正式训练默认使用 16 类品牌任务。双卡全视图 baseline（无 Token 剪枝）运行：
 
-已在服务器的真实 `scene_030` 数据上执行上述命令：测试段识别到 271 个同步
-样本，输入批张量为 `[1, 4, 3, 224, 224]`，MV-ViT 输出为 `[1, 6]`，首个样本
-四路分别读取到 8、12、6、5 个标注目标。由此确认第二场景数据目录、四路同步
-组合、COCO 标注索引、DataLoader 拼批和现有模型前向数据流均可用；这只是连通性
-验证，不代表模型已经在 SEVD 上训练或具备有效精度。
+```bash
+cd /root/autodl-tmp/EdgeCloud/module_edge_perception
+torchrun --standalone --nproc_per_node=2 train_boxcars.py \
+  --task make --batch-size 4 --accumulation-steps 2
+```
+
+### Baseline 结果（2026-07-31）
+
+使用 ImageNet 预训练的 `vit_small_patch16_224`、官方 `make` 划分和双卡 BF16
+训练 30 轮。最佳 validation Top-1 为 93.85%；加载 `best.pth` 在官方 test 集
+12,322 条车辆轨迹上评估，结果为：
+
+| 指标 | 结果 |
+|---|---:|
+| Test loss | 0.651585 |
+| Test Top-1 | 88.04% |
+| Test Top-5 | 97.13% |
+
+validation 与 test 的差距符合官方跨摄像头划分的难度：测试摄像头不出现在训练集。
+复现实验使用：
+
+```bash
+torchrun --standalone --nproc_per_node=2 evaluate_boxcars.py \
+  --checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --task make --split test --batch-size 16
+```
