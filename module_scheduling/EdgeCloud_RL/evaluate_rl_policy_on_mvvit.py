@@ -24,6 +24,8 @@ def find_mv_vit_dir():
     for root in search_roots:
         candidates.append(root)
         candidates.append(root / "MV-VIT")
+        # 当前仓库布局：感知模块在 module_edge_perception/ 子目录
+        candidates.append(root / "module_edge_perception")
 
     for candidate in candidates:
         if (candidate / "dataset.py").exists() and (candidate / "model.py").exists():
@@ -39,6 +41,7 @@ sys.path.insert(0, str(MV_VIT_DIR))
 
 from dataset import ModelNet40MultiView  # noqa: E402
 from model import EarlyFusionMultiViewViT  # noqa: E402
+from adaptformer import attach_adaptformer, load_adapter_checkpoint  # noqa: E402
 from prompt_tuning.prompt_model import PromptGenerator  # noqa: E402
 from drift_dataset import (  # noqa: E402
     DeterministicDriftWrapper,
@@ -91,6 +94,25 @@ def parse_args():
         default="u1",
         choices=["none", "u1", "u1_u2"],
         help="When to inject prompt tokens if --prompt-checkpoint is provided.",
+    )
+    parser.add_argument(
+        "--adapter-checkpoint",
+        type=Path,
+        default=None,
+        help="AdaptFormer adapter weights (u=1 口径，adapter 参数同步)。提供后 u=1 走 adapter，prompt 回退为仅 base 可选。",
+    )
+    parser.add_argument(
+        "--adapter-r",
+        type=int,
+        default=32,
+        help="Adapter bottleneck dim; must match the trained adapter checkpoint.",
+    )
+    parser.add_argument(
+        "--adapter-for-u",
+        type=str,
+        default="u1",
+        choices=["none", "u1", "u1_u2"],
+        help="When to use adapter weights if --adapter-checkpoint is provided.",
     )
     parser.add_argument(
         "--inactive-view-keep",
@@ -309,10 +331,36 @@ def load_retrain_model(args, device):
     return retrain_model
 
 
+def load_adapter_model(args, baseline_checkpoint, device):
+    """u=1 边侧模型：基线主干 + adapter（加载云端下发权重）。
+
+    当前只有一份 adapter 权重（云端新下发），故 u=0 走 base（无有效 adapter，
+    等价于零初始化 adapter：输出=原主干）。将来要表现"本地旧 adapter vs 云端新
+    adapter"时，把 base 模型也 attach 并加载旧权重即可。
+    """
+    if args.adapter_checkpoint is None:
+        return None
+    model = load_model(args, baseline_checkpoint, device)
+    attach_adaptformer(model, r=args.adapter_r)
+    missing, unexpected = load_adapter_checkpoint(model, args.adapter_checkpoint, device)
+    print(f"adapter 权重加载: missing={len(missing)}, unexpected={len(unexpected)}")
+    model.eval()
+    return model
+
+
 def should_use_prompt(u_values, args):
     if args.prompt_for_u == "none" or args.prompt_checkpoint is None:
         return torch.zeros_like(u_values, dtype=torch.bool)
     if args.prompt_for_u == "u1":
+        return u_values == 1
+    return (u_values == 1) | (u_values == 2)
+
+
+def should_use_adapter(u_values, args):
+    """u=1 口径：adapter 参数同步生效的时隙（默认 u==1）。"""
+    if args.adapter_for_u == "none" or args.adapter_checkpoint is None:
+        return torch.zeros_like(u_values, dtype=torch.bool)
+    if args.adapter_for_u == "u1":
         return u_values == 1
     return (u_values == 1) | (u_values == 2)
 
@@ -484,7 +532,7 @@ def run_policy_forward(model, images, view_masks, effective_ratios, args, prompt
 
 
 @torch.no_grad()
-def evaluate(model, retrain_model, prompt_gen, loader, policy, args, device):
+def evaluate(model, retrain_model, adapter_model, prompt_gen, loader, policy, args, device):
     total = 0
     baseline_correct = 0
     policy_correct = 0
@@ -525,6 +573,7 @@ def evaluate(model, retrain_model, prompt_gen, loader, policy, args, device):
         baseline_pred = baseline_logits.argmax(dim=1)
 
         use_prompt = should_use_prompt(u_values, args)
+        use_adapter = should_use_adapter(u_values, args)
         use_retrain = (u_values == 2) & (retrain_model is not None)
         policy_logits = torch.empty_like(baseline_logits)
 
@@ -532,17 +581,21 @@ def evaluate(model, retrain_model, prompt_gen, loader, policy, args, device):
         if prompt_gen is not None and torch.any(use_prompt):
             condition_ids = drift_types_to_condition_ids(drift_types, device)
 
-        for model_selector, active_model in [("base", model), ("retrain", retrain_model)]:
-            if active_model is None:
-                continue
-            if model_selector == "retrain":
-                model_mask = use_retrain
-            else:
-                model_mask = ~use_retrain
-            if not torch.any(model_mask):
+        # 模型分派：u=0→base（prompt 遗留可选），u=1→adapter，u=2→retrain。
+        # adapter 提供时 u=1 走 adapter（优先于 prompt）；未提供时回退旧 prompt 行为。
+        model_variants = [("base", model, ~use_adapter & ~use_retrain)]
+        if adapter_model is not None:
+            model_variants.append(("adapter", adapter_model, use_adapter))
+        if retrain_model is not None:
+            model_variants.append(("retrain", retrain_model, use_retrain))
+
+        for model_selector, active_model, model_mask in model_variants:
+            if active_model is None or not torch.any(model_mask):
                 continue
 
-            for prompt_state in [False, True]:
+            prompt_allowed = model_selector == "base" and adapter_model is None
+            prompt_states = [False, True] if prompt_allowed else [False]
+            for prompt_state in prompt_states:
                 sub_mask = model_mask & (use_prompt == prompt_state)
                 if not torch.any(sub_mask):
                     continue
@@ -631,6 +684,7 @@ def print_summary(metrics, args):
     print(f"评估模式: {args.eval_mode}")
     print(f"漂移日程: {args.drift_schedule}")
     print(f"Prompt 接入: {args.prompt_checkpoint is not None}, prompt_for_u={args.prompt_for_u}")
+    print(f"Adapter 接入: {args.adapter_checkpoint is not None}, adapter_for_u={args.adapter_for_u}, r={args.adapter_r}")
     print(f"Retrain 接入: {args.retrain_checkpoint is not None}")
     print(f"样本数: {metrics['total']}")
     print(f"完整 4 视角准确率: {metrics['baseline_acc']:.4%}")
@@ -659,9 +713,12 @@ def main():
     loader = build_loader(args)
     model = load_model(args, checkpoint_path, device)
     prompt_gen = load_prompt_bundle(args, model, device)
+    adapter_model = load_adapter_model(args, checkpoint_path, device)
     retrain_model = load_retrain_model(args, device)
 
-    metrics = evaluate(model, retrain_model, prompt_gen, loader, policy, args, device)
+    metrics = evaluate(
+        model, retrain_model, adapter_model, prompt_gen, loader, policy, args, device
+    )
     write_rows(args.output, metrics["rows"], args.num_views)
     print_summary(metrics, args)
     print(f"逐样本评估日志已保存: {args.output}")
