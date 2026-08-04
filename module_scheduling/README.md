@@ -22,14 +22,14 @@
 ```
 module_scheduling/
 ├── EdgeCloud_RL/             # Actor-Critic RL + Lyapunov 主循环（实际代码在此，非 scheduler/ 子目录）
-│   ├── main_edge_cloud_new.py  # 当前单节点主循环
+│   ├── main_edge_cloud_new.py  # 单节点主循环（已接 adapter u=1 口径）
 │   ├── main_edge_cloud.py      # 【已失效】旧版，Critic 调用签名不匹配，勿用
 │   ├── actor_memory.py / critic_water_filling.py
 │   ├── generate_real_trajectory.py / evaluate_rl_policy_on_mvvit.py
+│   ├── network_sim.py           # 网络波动模拟器
 │   └── plot_*.py
 ├── comparison_baselines/     # LSCI/VBRD/Hyperion 基线（有意弱化，答辩公平性有风险）
 ├── multi_node/                # 【待建】arbiter.py / overlap_manager.py / rollback.py
-└── network_sim/              # 【待建】network_sim.py（唐凤玲 8/4 开写）
 ```
 
 ## 代码来源
