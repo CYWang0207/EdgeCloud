@@ -23,7 +23,9 @@
 EdgeCloud/
 ├── module_edge_perception/         # 模块一：边缘实时感知
 │   ├── model.py                     #   EarlyFusionMultiViewViT（多视角早期融合 + token剪枝 + 视角掩码）
-│   ├── adaptformer.py              #   【待落地】AdaptFormer PEFT 模块（FFN 旁路）
+│   ├── adaptformer.py              #   AdaptFormer PEFT 模块（已落地，8/3 验收通过）
+│   ├── train_adapter.py             #   Adapter 蒸馏训练（云端软标签→只训 adapter）
+│   ├── verify_adaptformer.py        #   AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 │   ├── boxcars_dataset.py           #   场景二 BoxCars116k 数据加载
 │   ├── dataset.py / drift_dataset.py
 │   ├── prompt_tuning/               #   Prompt 生成器（可选辅助）
@@ -31,10 +33,9 @@ EdgeCloud/
 │   └── benchmarks/                  #   TTFT / 内存 / 延迟 / 一体化测量
 │
 ├── module_scheduling/              # 模块二：云边协同调度
-│   ├── EdgeCloud_RL/                #   Actor-Critic RL + Lyapunov 主循环 + 注水 Critic
+│   ├── EdgeCloud_RL/                #   Actor-Critic RL + Lyapunov 主循环 + 注水 Critic + 网络模拟器
 │   ├── comparison_baselines/       #   LSCI/VBRD/Hyperion 基线
 │   ├── multi_node/                 #   【待建】多节点冲突检测与仲裁
-│   └── network_sim/                 #   【待建】网络波动模拟
 │
 ├── common/                          # 漂移模拟器（5种×6档 schedule）
 ├── data/                            # 数据集（不进 Git：ModelNet40、BoxCars116k）

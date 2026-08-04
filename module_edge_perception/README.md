@@ -3,7 +3,7 @@
 ## 职责
 
 - MV-ViT 多视角推理（ViT-Small, 2200万参数, 4视角早期融合）
-- AdaptFormer adapter：FFN 旁路 PEFT，主干冻结只训 adapter（截至 8/3 待落地）
+- AdaptFormer adapter：FFN 旁路 PEFT，主干冻结只训 adapter（已落地，8/3 验收通过）
 - Token 剪枝：运行时动态保留率 k_t
 - 漂移模拟与感知：5种环境漂移 + 香农熵 Edrift + 结构性漂移
 - Prompt 注入：旧方案遗留，作"环境漂移快响应"可选辅助（存在两套实现，待清理）
@@ -22,7 +22,9 @@
 ```
 module_edge_perception/
 ├── model.py                          # MV-ViT 模型（EarlyFusionMultiViewViT）
-├── adaptformer.py                    # 【待落地】AdaptFormer PEFT 模块
+├── adaptformer.py                    # AdaptFormer PEFT 模块（已落地，8/3 验收通过）
+├── train_adapter.py                  # Adapter 蒸馏训练（云端软标签→只训 adapter）
+├── verify_adaptformer.py             # AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 ├── boxcars_dataset.py                # 场景二 BoxCars116k 数据加载（4逻辑视图 + view_mask）
 ├── boxcars_drift_dataset.py          # BoxCars 漂移包装
 ├── train_boxcars.py                  # BoxCars baseline DDP 训练（test Top-1=88.04%）

@@ -1,5 +1,5 @@
 """
-一体化评测脚本：精度 + 延迟 + 内存 全指标评测。
+一体化评测脚本：精度 + 延迟 + 内存 全指标评测，支持 AdaptFormer 对比。
 
 支持两种运行模式：
   1. 随机数据模式（默认）：测延迟 + 内存，无需数据集/checkpoint（本地演示用）
@@ -9,19 +9,27 @@
   --scene modelnet40  （场景1，40类分类）
   --scene boxcars      （场景2，BoxCars116k 多视图车辆分类）
 
+AdaptFormer 对比（--adapter-r）：
+  传入 --adapter-r 32 后，挂载 adapter，单实例切换 enabled on/off 对比：
+    adapter=off  ⇔  无 adapter 基线（enabled=False，等价原 FFN）
+    adapter=on   ⇔  有 adapter（enabled=True）
+  不传 --adapter-r 则只测无 adapter（原行为）。
+
 用法（从 module_edge_perception/ 目录运行）：
     # 随机数据模式（本地演示）
     py -3.11 benchmarks/benchmark_full.py
-    py -3.11 benchmarks/benchmark_full.py --model-name vit_tiny_patch16_224
+    py -3.11 benchmarks/benchmark_full.py --adapter-r 32
 
-    # 真实数据模式（服务器，场景1）
+    # 真实数据模式（服务器，场景1，带 adapter 对比）
     py -3.11 benchmarks/benchmark_full.py --scene modelnet40 \
-        --dataset-path ../data/modelnet40v2png_ori4 --checkpoint models/mv_vit_best.pth
+        --dataset-path ../data/modelnet40v2png_ori4 \
+        --checkpoint models/mv_vit_best.pth --adapter-r 32
 
     # 真实数据模式（服务器，场景2）
     py -3.11 benchmarks/benchmark_full.py --scene boxcars \
         --dataset-path ../data/BoxCars116k_kaggle/BoxCars116k \
-        --boxcars-task make --checkpoint models/mv_vit_boxcars_make.pth
+        --boxcars-task make --checkpoint models/mv_vit_boxcars_make.pth \
+        --adapter-r 32
 
 输出：
     benchmarks/results/full_benchmark_<model>_<scene>.csv
@@ -243,6 +251,14 @@ def parse_args():
     p.add_argument("--num-workers", type=int, default=0)
     p.add_argument("--max-accuracy-batches", type=int, default=None,
                    help="精度测量最大 batch 数（不填则全量）")
+    p.add_argument("--adapter-r", type=int, default=None,
+                   help="挂载 AdaptFormer 的压缩比 r（如 32）。不传则不挂载。"
+                        "传入后单实例切换 on/off 对比挂/不挂 adapter")
+    p.add_argument("--adapter-scale", type=float, default=1.0,
+                   help="AdaptFormer 的初始 scale（默认 1.0）")
+    p.add_argument("--adapter-checkpoint", default=None,
+                   help="adapter 权重路径（如 adapter_best.pth）。格式 {adapter,norm,head}。"
+                        "传入后加载真实权重，否则 adapter 为 identity 初始化")
     p.add_argument("--out-dir", default=str(Path(__file__).resolve().parent / "results"))
     return p.parse_args()
 
@@ -252,14 +268,24 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     keep_ratios = [float(x) for x in args.keep_ratios.split(",")]
 
+    # 是否启用 adapter 对比
+    use_adapter = args.adapter_r is not None
+    # adapter 状态列表：无 adapter 时只有 ["none"]；有 adapter 时 ["off", "on"]
+    adapter_states = (["off", "on"] if use_adapter else ["none"])
+
     print("=" * 70)
-    print("一体化评测：精度 + 延迟 + 内存")
+    print("一体化评测：精度 + 延迟 + 内存" + ("（含 AdaptFormer 对比）" if use_adapter else ""))
     print("=" * 70)
     print(f"设备: {device}")
     print(f"模型: {args.model_name}")
     print(f"场景: {args.scene}")
     print(f"batch: {args.batch_size}  warmup: {args.warmup}  repeat: {args.repeat}")
     print(f"keep_ratios: {keep_ratios}")
+    if use_adapter:
+        print(f"AdaptFormer: r={args.adapter_r} scale={args.adapter_scale} "
+              f"(单实例切换 off/on 对比)")
+    else:
+        print(f"AdaptFormer: 未挂载")
     print(f"数据集: {args.dataset_path or '随机数据（无精度）'}")
     print(f"权重: {args.checkpoint or '随机权重'}")
     print()
@@ -292,9 +318,35 @@ def main():
     else:
         print("使用随机权重")
 
+    # 2b. 挂载 AdaptFormer（如有）
+    n_adapter = 0
+    adapter_kb = 0.0
+    if use_adapter:
+        from adaptformer import (
+            attach_adaptformer, set_adapter_enabled, count_adapter_parameters,
+            load_adapter_checkpoint,
+        )
+        attach_adaptformer(model, r=args.adapter_r, scale=args.adapter_scale)
+        n_adapter = count_adapter_parameters(model)
+        adapter_kb = n_adapter * 4 / 1024
+        print(f"adapter 参数: {n_adapter:,} ({n_adapter/1e6:.3f}M)  下发体积: {adapter_kb:.1f} KB")
+        # 加载真实权重（如有）—— on 状态用真权重，off 状态等价无 adapter
+        if args.adapter_checkpoint and os.path.exists(args.adapter_checkpoint):
+            missing, unexpected = load_adapter_checkpoint(
+                model, args.adapter_checkpoint, device=str(device))
+            print(f"adapter 权重已加载: {args.adapter_checkpoint}")
+            if missing:
+                print(f"  missing keys: {len(missing)}")
+            if unexpected:
+                print(f"  unexpected keys: {len(unexpected)}")
+        elif args.adapter_checkpoint:
+            print(f"  ⚠️ adapter 权重不存在: {args.adapter_checkpoint}，使用 identity 初始化")
+        else:
+            print(f"  adapter 为 identity 初始化（无 --adapter-checkpoint）")
+
     n_params = sum(p.numel() for p in model.parameters())
     weight_mb = n_params * 4 / (1024 ** 2)
-    print(f"参数量: {n_params:,} ({n_params/1e6:.1f}M)  权重: {weight_mb:.1f} MB")
+    print(f"总参数量: {n_params:,} ({n_params/1e6:.1f}M)  权重: {weight_mb:.1f} MB")
 
     # 3. 准备输入
     if loader is not None:
@@ -303,73 +355,92 @@ def main():
         images = torch.randn(args.batch_size, args.num_views, 3, 224, 224, device=device)
     print(f"输入形状: {tuple(images.shape)}")
 
-    # 4. 评测各 keep_ratio
+    # 4. 评测：keep_ratio × adapter_state 两维遍历
     rows = []
     base_seq_len = 1 + args.num_views * 196
-    base_median = None
+    base_median = None  # 无 adapter 基线（adapter off / none, keep=1.0）的中位数
 
     for kr in keep_ratios:
         keep_count = max(1, int(math.ceil(kr * 196)))
         seq_len = 1 + args.num_views * keep_count if kr < 1.0 else base_seq_len
         mode = "baseline" if kr >= 1.0 else "hard_prune"
 
-        print(f"\n[{mode} keep={kr}] seq_len={seq_len}")
+        for adp_state in adapter_states:
+            # 设置 adapter 状态
+            if use_adapter:
+                set_adapter_enabled(model, adp_state == "on")
 
-        # 延迟
-        if kr >= 1.0:
-            fn = lambda: model(images)
-        else:
-            fn = lambda: model.forward_hard_prune(images, keep_ratio=kr,
-                                                  token_score_mode="importance")
-        lat = measure_latency(model, fn, args.warmup, args.repeat)
-        print(f"  延迟: median={lat['median_ms']:.1f}ms  p95={lat['p95_ms']:.1f}ms")
+            tag = f"{mode} keep={kr}"
+            if use_adapter:
+                tag += f" adapter={adp_state}"
+            print(f"\n[{tag}] seq_len={seq_len}")
 
-        if kr >= 1.0:
-            base_median = lat["median_ms"]
-            ttft_drop = 0.0
-        else:
-            ttft_drop = (base_median - lat["median_ms"]) / base_median * 100
-            print(f"  TTFT降幅: {ttft_drop:.1f}%{' ✅' if ttft_drop >= 75 else ''}")
+            # 延迟
+            if kr >= 1.0:
+                fn = lambda: model(images)
+            else:
+                fn = lambda: model.forward_hard_prune(images, keep_ratio=kr,
+                                                      token_score_mode="importance")
+            lat = measure_latency(model, fn, args.warmup, args.repeat)
+            print(f"  延迟: median={lat['median_ms']:.1f}ms  p95={lat['p95_ms']:.1f}ms")
 
-        # 内存
-        mem = measure_memory(model, fn, weight_mb)
-        mem_ok = mem["total_gb"] <= 1.5
-        print(f"  内存: 总占用={mem['total_gb']:.3f}GB  推理增量={mem['inference_mb']:.1f}MB"
-              f"  {'✅' if mem_ok else '❌'}")
+            # 以"无 adapter + keep=1.0"为 TTFT 基线
+            is_baseline_ref = (kr >= 1.0) and (adp_state in ("off", "none"))
+            if is_baseline_ref:
+                base_median = lat["median_ms"]
+                ttft_drop = 0.0
+            else:
+                ttft_drop = (base_median - lat["median_ms"]) / base_median * 100 if base_median else 0.0
+                if kr < 1.0:
+                    print(f"  TTFT降幅: {ttft_drop:.1f}%{' ✅' if ttft_drop >= 75 else ''}")
 
-        # 精度
-        acc = measure_accuracy(model, loader, device, kr, num_classes,
-                               args.max_accuracy_batches)
-        if acc is not None:
-            print(f"  精度: Top-1={acc*100:.2f}%")
-        else:
-            print(f"  精度: N/A（无分类标签或无数据集）")
+            # 内存
+            mem = measure_memory(model, fn, weight_mb)
+            mem_ok = mem["total_gb"] <= 1.5
+            print(f"  内存: 总占用={mem['total_gb']:.3f}GB  推理增量={mem['inference_mb']:.1f}MB"
+                  f"  {'✅' if mem_ok else '❌'}")
 
-        rows.append({
-            "mode": mode,
-            "keep_ratio": kr,
-            "seq_len": seq_len,
-            "median_ms": round(lat["median_ms"], 2),
-            "p95_ms": round(lat["p95_ms"], 2),
-            "ttft_drop_pct": round(ttft_drop, 1),
-            "memory_gb": round(mem["total_gb"], 4),
-            "memory_inference_mb": round(mem["inference_mb"], 1),
-            "memory_ok": mem_ok,
-            "accuracy": round(acc * 100, 2) if acc is not None else "N/A",
-            "params_m": round(n_params / 1e6, 1),
-        })
+            # 精度
+            acc = measure_accuracy(model, loader, device, kr, num_classes,
+                                   args.max_accuracy_batches)
+            if acc is not None:
+                print(f"  精度: Top-1={acc*100:.2f}%")
+            else:
+                print(f"  精度: N/A（无分类标签或无数据集）")
+
+            rows.append({
+                "mode": mode,
+                "keep_ratio": kr,
+                "adapter": adp_state,
+                "seq_len": seq_len,
+                "median_ms": round(lat["median_ms"], 2),
+                "p95_ms": round(lat["p95_ms"], 2),
+                "ttft_drop_pct": round(ttft_drop, 1),
+                "memory_gb": round(mem["total_gb"], 4),
+                "memory_inference_mb": round(mem["inference_mb"], 1),
+                "memory_ok": mem_ok,
+                "accuracy": round(acc * 100, 2) if acc is not None else "N/A",
+                "params_m": round(n_params / 1e6, 1),
+                "adapter_params": n_adapter,
+                "adapter_kb": round(adapter_kb, 1),
+            })
+
+    # 恢复 adapter 状态
+    if use_adapter:
+        set_adapter_enabled(model, True)
 
     # 5. 写 CSV
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    tag = f"{args.model_name.replace('_', '')}_{args.scene}"
-    csv_path = out_dir / f"full_benchmark_{tag}.csv"
+    tag_name = f"{args.model_name.replace('_', '')}_{args.scene}"
+    csv_path = out_dir / f"full_benchmark_{tag_name}.csv"
+    fieldnames = [
+        "mode", "keep_ratio", "adapter", "seq_len", "median_ms", "p95_ms",
+        "ttft_drop_pct", "memory_gb", "memory_inference_mb", "memory_ok",
+        "accuracy", "params_m", "adapter_params", "adapter_kb"
+    ]
     with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=[
-            "mode", "keep_ratio", "seq_len", "median_ms", "p95_ms",
-            "ttft_drop_pct", "memory_gb", "memory_inference_mb", "memory_ok",
-            "accuracy", "params_m"
-        ])
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
     print(f"\nCSV 已保存: {csv_path}")
@@ -382,11 +453,19 @@ def main():
 
         fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
+        # 按 adapter 状态分组
+        if use_adapter:
+            groups = {"off": ("bo-", "无 adapter"), "on": ("r^-", "有 adapter")}
+        else:
+            groups = {"none": ("bo-", "baseline")}
+
         # 延迟图
         ax = axes[0]
-        xs = [r["keep_ratio"] for r in rows]
-        ys = [r["median_ms"] for r in rows]
-        ax.plot(xs, ys, "bo-")
+        for adp_state, (style, label) in groups.items():
+            xs = [r["keep_ratio"] for r in rows if r["adapter"] == adp_state]
+            ys = [r["median_ms"] for r in rows if r["adapter"] == adp_state]
+            if xs:
+                ax.plot(xs, ys, style, label=label)
         if base_median:
             ax.axhline(base_median, color="gray", linestyle=":", label="baseline")
             target = base_median * 0.25
@@ -399,8 +478,11 @@ def main():
 
         # 内存图
         ax = axes[1]
-        ys = [r["memory_gb"] for r in rows]
-        ax.plot(xs, ys, "rs-")
+        for adp_state, (style, label) in groups.items():
+            xs = [r["keep_ratio"] for r in rows if r["adapter"] == adp_state]
+            ys = [r["memory_gb"] for r in rows if r["adapter"] == adp_state]
+            if xs:
+                ax.plot(xs, ys, style, label=label)
         ax.axhline(1.5, color="red", linestyle="--", label="1.5GB limit")
         ax.set_xlabel("keep_ratio")
         ax.set_ylabel("Memory (GB)")
@@ -410,10 +492,15 @@ def main():
 
         # 精度图（如有）
         ax = axes[2]
-        accs = [r["accuracy"] for r in rows if r["accuracy"] != "N/A"]
-        if accs:
-            xs_a = [r["keep_ratio"] for r in rows if r["accuracy"] != "N/A"]
-            ax.plot(xs_a, accs, "g^-")
+        any_acc = any(r["accuracy"] != "N/A" for r in rows)
+        if any_acc:
+            for adp_state, (style, label) in groups.items():
+                xs_a = [r["keep_ratio"] for r in rows
+                        if r["adapter"] == adp_state and r["accuracy"] != "N/A"]
+                accs = [r["accuracy"] for r in rows
+                        if r["adapter"] == adp_state and r["accuracy"] != "N/A"]
+                if xs_a:
+                    ax.plot(xs_a, accs, style, label=label)
             ax.set_ylabel("Top-1 Accuracy (%)")
             ax.set_title("Accuracy")
         else:
@@ -421,12 +508,14 @@ def main():
                     transform=ax.transAxes, fontsize=14)
             ax.set_title("Accuracy (N/A)")
         ax.set_xlabel("keep_ratio")
+        ax.legend()
         ax.grid(True, alpha=0.3)
 
-        fig.suptitle(f"{args.model_name} | {args.scene} | batch={args.batch_size} | {device}",
+        fig.suptitle(f"{args.model_name} | {args.scene} | batch={args.batch_size} | {device}"
+                     + (f" | adapter r={args.adapter_r}" if use_adapter else ""),
                      fontsize=12)
         fig.tight_layout()
-        png_path = out_dir / f"full_benchmark_{tag}.png"
+        png_path = out_dir / f"full_benchmark_{tag_name}.png"
         fig.savefig(png_path, dpi=120, bbox_inches="tight")
         print(f"图表已保存: {png_path}")
     except Exception as e:
@@ -434,19 +523,19 @@ def main():
 
     # 7. 汇总
     print("\n" + "=" * 70)
-    print(f"汇总：{args.model_name} @ {args.scene} (batch={args.batch_size}, {device})")
+    title = f"{args.model_name} @ {args.scene} (batch={args.batch_size}, {device})"
+    if use_adapter:
+        title += f" | adapter r={args.adapter_r} ({adapter_kb:.0f}KB)"
+    print(f"汇总：{title}")
     print("=" * 70)
-    print(f"{'mode':<12}{'keep':<8}{'seq':<8}{'延迟ms':<10}{'TTFT降':<10}"
-          f"{'内存GB':<10}{'精度':<10}{'达标':<10}")
+    print(f"{'mode':<11}{'keep':<7}{'adapter':<9}{'seq':<7}{'延迟ms':<10}"
+          f"{'TTFT降':<10}{'内存GB':<10}{'精度':<10}")
     for r in rows:
         ttft = f"{r['ttft_drop_pct']:.1f}%" if r["mode"] != "baseline" else "-"
         mem = f"{r['memory_gb']:.3f}"
         acc = f"{r['accuracy']}%" if r["accuracy"] != "N/A" else "N/A"
-        ok_ttft = "✅" if r["ttft_drop_pct"] >= 75 else ""
-        ok_mem = "✅" if r["memory_ok"] else ""
-        print(f"{r['mode']:<12}{r['keep_ratio']:<8}{r['seq_len']:<8}"
-              f"{r['median_ms']:<10.1f}{ttft:<10}{mem:<10}{acc:<10}"
-              f"{ok_ttft}{ok_mem:>6}")
+        print(f"{r['mode']:<11}{r['keep_ratio']:<7}{r['adapter']:<9}{r['seq_len']:<7}"
+              f"{r['median_ms']:<10.1f}{ttft:<10}{mem:<10}{acc:<10}")
 
 
 if __name__ == "__main__":
