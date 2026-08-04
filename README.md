@@ -1,14 +1,15 @@
 # EdgeCloud · 面向端边云协同推理的分布式感知与全局优化决策系统
 
 > 2026"揭榜挂帅"擂台赛 · 赛题 XH-202606  
-> **核心思路**：云端国产大模型（DeepSeek/VLM）充当"知识预言机"，将场景理解**压缩为轻量 Prompt Token** 注入边缘小模型；边缘 MV-ViT 负责实时多视角推理；调度层通过 Actor-Critic + Lyapunov 优化在线决策。  
-> **知识压缩替代参数压缩，Prompt 注入替代模型蒸馏。**
+> **核心思路**：云端国产大模型（DeepSeek/VLM）充当"知识预言机"，将场景知识**蒸馏压缩进轻量 AdaptFormer 适配器**下发到边缘 ViT 旁路；边缘 MV-ViT 主干冻结 + adapter 可训练，负责实时多视角推理；调度层通过 Actor-Critic + Lyapunov 优化在线决策。  
+> **压缩的不是参数，是云端大模型蒸馏出来的场景知识；传输的不是模型，是压缩后的小适配器。**  
+> 2026-08-03 团队拍板采用 Adapter 方案；prompt 注入降为可选辅助。
 
 ## 团队成员
 
 | 成员 | 负责模块 | 职责 |
 |------|---------|------|
-| 王成洋（队长） | 系统集成 + 多节点协同 | 总体架构、接口统筹、多节点冲突检测与仲裁 |
+| 王成洋 | 系统集成 + 多节点协同 | 总体架构、接口统筹、多节点冲突检测与仲裁 |
 | 钟捷杭 | 模型评测 | TTFT / 内存 / 延迟测量 |
 | 张晨 | 第二场景 | 第二应用场景数据集适配与全流程训练 |
 | 唐凤玲 | 网络韧性 + 评测 | 网络波动模拟、连续性指标、评测自动化 |
@@ -20,40 +21,44 @@
 
 ```
 EdgeCloud/
-├── module_edge_perception/    # 模块一：边缘实时感知
-│   ├── model/                 #   MV-ViT + Token 剪枝
-│   ├── drift/                 #   漂移模拟（5种）
-│   ├── prompt/                #   Prompt 生成与注入
-│   └── benchmarks/            #   TTFT / 内存 / 延迟测量
+├── module_edge_perception/         # 模块一：边缘实时感知
+│   ├── model.py                     #   EarlyFusionMultiViewViT（多视角早期融合 + token剪枝 + 视角掩码）
+│   ├── adaptformer.py              #   【待落地】AdaptFormer PEFT 模块（FFN 旁路）
+│   ├── boxcars_dataset.py           #   场景二 BoxCars116k 数据加载
+│   ├── dataset.py / drift_dataset.py
+│   ├── prompt_tuning/               #   Prompt 生成器（可选辅助）
+│   ├── train*.py                    #   训练脚本（ModelNet40 / BoxCars / 漂移重训 / Prompt）
+│   └── benchmarks/                  #   TTFT / 内存 / 延迟 / 一体化测量
 │
-├── module_scheduling/         # 模块二：云边协同调度
-│   ├── scheduler/             #   Actor-Critic RL + Lyapunov
-│   ├── vlm_oracle/            #   云端 VLM 模拟接口
-│   ├── multi_node/            #   多节点冲突检测与仲裁
-│   └── network_sim/           #   网络波动模拟
+├── module_scheduling/              # 模块二：云边协同调度
+│   ├── EdgeCloud_RL/                #   Actor-Critic RL + Lyapunov 主循环 + 注水 Critic
+│   ├── comparison_baselines/       #   LSCI/VBRD/Hyperion 基线
+│   ├── multi_node/                 #   【待建】多节点冲突检测与仲裁
+│   └── network_sim/                 #   【待建】网络波动模拟
 │
-├── data/                      # 数据集（不进 Git）
-├── models/                    # 模型权重（不进 Git）
-├── experiments/               # 实验脚本与结果
-├── scripts/                   # 一键运行脚本
-├── docs/                      # 方案文档
-└── requirements.txt           # Python 依赖
+├── common/                          # 漂移模拟器（5种×6档 schedule）
+├── data/                            # 数据集（不进 Git：ModelNet40、BoxCars116k）
+├── models/                          # 模型权重（不进 Git；checkpoints 当前为 0 字节占位）
+├── scripts/                         # 一键运行脚本
+├── docs/                            # 方案文档
+└── requirements.txt                 # Python 依赖
 ```
 
 ## 技术架构
 
 ```
          +---------- 云端 Cloud ----------+
-         | DeepSeek / VLM "知识预言机"     |
+         | DeepSeek / VLM "知识预言机"     |   ← 冻结，不训练
          | · 分析关键帧 -> 判断环境状态     |
-         | · P_env (2KB) + w_t (4标量)    |
+         | · 蒸馏监督 AdaptFormer adapter  |
          | · 多节点冲突仲裁                |
          +---+--------------------+------+
-   上行关键帧 |                    | 下行 Prompt (几KB)
+   上行关键帧 |                    | 下行 adapter 参数（几百KB~MB）/ 重训权重
              |                    v
          +--------------------------------+
          |    边缘 Edge（路口盒子）        |
-         | MV-ViT (ViT-Small, 2200万)     |
+         | MV-ViT (ViT-Small, 2200万) 主干冻结
+         | + AdaptFormer adapter (可训练) |
          | · Token剪枝: k_t               |
          | · 视角选择: v_t                |
          | · 协同模式: ut in {0,1,2}      |
@@ -70,7 +75,7 @@ EdgeCloud/
 
 ## 方案亮点
 
-1. **知识压缩替代参数压缩**：DeepSeek 在云端分析场景，把理解压缩成 4 个 Prompt Token（2KB）注入边缘 ViT，而非把 175B 模型蒸馏到 10M
+1. **知识压缩替代参数压缩**：DeepSeek/VLM 在云端分析场景、产软标签，把知识蒸馏压缩进 AdaptFormer adapter（几百KB~MB）下发边缘，而非把 175B 模型蒸馏到 10M
 2. **多粒度资源调度**：每时隙联合决策视角选择、Token 剪枝率、协同模式，KKT 注水闭式解保证 ms 级决策
 3. **理论保证**：Lyapunov 强稳定性证明、O(1/V) 效用逼近界、KKT 最优性条件
 4. **多源异构**：四路摄像头天然异构（光照/遮挡/视角各异），MV-ViT 早期融合统一处理

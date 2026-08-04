@@ -12,7 +12,7 @@ if __name__ == "__main__":
         'gamma': 10.0,  # 对数效用函数缩放参数
         'k_min': 0.1,  # 最小 Token 保留率
         'beta_0': 0.2,  # 基础精度
-        'S_prompt': 2.0,  # P_env 下发带宽消耗 (MB)
+        'S_adapter': 1.2,  # adapter 参数下发带宽消耗 (MB)
         'SCL_weights': 50.0,  # 重训练模型权重带宽消耗 (MB)
         'S_query': 5.0  # 关键帧上传带宽消耗 (MB)
     }
