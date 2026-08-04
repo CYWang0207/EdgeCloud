@@ -21,6 +21,8 @@ N_* 必须等于对应 split 的样本数。将来接真 VLM（InternVL/Qwen-VL�
 """
 
 import argparse
+import hashlib
+import json
 import os
 import random
 from contextlib import nullcontext
@@ -64,19 +66,48 @@ class TeacherSoftLabelDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.base)
 
+    @property
+    def classes(self):
+        return self.base.classes
+
+    @property
+    def samples(self):
+        return self.base.samples
+
     def __getitem__(self, idx):
         views, view_mask, label, _ = self.base[idx]
         return views, view_mask, label, self.logits[idx]
 
 
+def dataset_fingerprint(dataset):
+    """Hash the ordered sample identities and class mapping used by soft labels."""
+    payload = {
+        "samples": dataset.samples,
+        "classes": dataset.classes,
+        "task": dataset.task,
+        "split": dataset.split,
+        "num_views": dataset.num_views,
+    }
+    encoded = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def load_soft_labels(path):
     if path is None:
         return {}
-    data = np.load(path)
+    data = np.load(path, allow_pickle=False)
     out = {}
     for key in ("train_logits", "val_logits", "test_logits"):
         if key in data:
-            out[key] = torch.as_tensor(data[key], dtype=torch.float32)
+            logits = np.asarray(data[key])
+            if logits.ndim != 2:
+                raise ValueError(f"{key} 必须是二维 [N, C]，实际为 {logits.shape}")
+            if not np.isfinite(logits).all():
+                raise ValueError(f"{key} 包含 NaN 或 Inf")
+            out[key] = torch.as_tensor(logits, dtype=torch.float32)
+    for key in ("train_fingerprint", "val_fingerprint"):
+        if key in data:
+            out[key] = str(data[key].item())
     if "train_logits" not in out:
         raise ValueError(f"soft label 文件缺少 train_logits: {path}")
     return out
@@ -164,6 +195,22 @@ def make_loaders(args, distributed, rank, world_size, soft_labels):
     val_set = BoxCarsMultiView(
         args.dataset_path, "validation", args.task, args.num_views, eval_transform
     )
+    expected_classes = len(train_set.classes)
+    for split, dataset, key in (
+        ("train", train_set, "train_logits"),
+        ("validation", val_set, "val_logits"),
+    ):
+        if key in soft_labels and soft_labels[key].shape[1] != expected_classes:
+            raise ValueError(
+                f"{key} 类别数 {soft_labels[key].shape[1]} != {expected_classes}"
+            )
+        fingerprint_key = "train_fingerprint" if split == "train" else "val_fingerprint"
+        if fingerprint_key in soft_labels:
+            actual = dataset_fingerprint(dataset)
+            if soft_labels[fingerprint_key] != actual:
+                raise ValueError(
+                    f"{split} 数据集顺序指纹不一致，拒绝使用可能错位的软标签"
+                )
     if "train_logits" in soft_labels:
         train_set = TeacherSoftLabelDataset(train_set, soft_labels["train_logits"])
     if "val_logits" in soft_labels:
@@ -253,6 +300,9 @@ def main():
     if rank == 0:
         print(f"基线主干加载: missing={len(missing)}, unexpected={len(unexpected)}")
     attach_adaptformer(model, r=args.r)
+    # attach_adaptformer creates new modules on CPU even when the base model was
+    # already moved to CUDA, so migrate the complete model once more.
+    model.to(device)
     freeze_backbone(model)
     if distributed:
         model = DDP(model, device_ids=[local_rank])
