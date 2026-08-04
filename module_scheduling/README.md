@@ -17,14 +17,19 @@
 | 决策冲突 | < 5% | 云端 VLM 全局仲裁 |
 | 冲突解决 | >= 90% | 置信度加权投票 + 回滚 |
 
-## 目录约定
+## 目录约定（部分目录待建）
 
 ```
 module_scheduling/
-├── scheduler/      # Actor-Critic RL + Lyapunov 主循环
-├── vlm_oracle/     # 云端 VLM 模拟接口
-├── multi_node/     # 多节点冲突检测与仲裁
-└── network_sim/    # 网络波动模拟
+├── EdgeCloud_RL/             # Actor-Critic RL + Lyapunov 主循环（实际代码在此，非 scheduler/ 子目录）
+│   ├── main_edge_cloud_new.py  # 当前单节点主循环
+│   ├── main_edge_cloud.py      # 【已失效】旧版，Critic 调用签名不匹配，勿用
+│   ├── actor_memory.py / critic_water_filling.py
+│   ├── generate_real_trajectory.py / evaluate_rl_policy_on_mvvit.py
+│   └── plot_*.py
+├── comparison_baselines/     # LSCI/VBRD/Hyperion 基线（有意弱化，答辩公平性有风险）
+├── multi_node/                # 【待建】arbiter.py / overlap_manager.py / rollback.py
+└── network_sim/              # 【待建】network_sim.py（唐凤玲 8/4 开写）
 ```
 
 ## 代码来源

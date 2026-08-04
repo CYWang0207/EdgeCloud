@@ -36,7 +36,8 @@ def add_common_args(parser):
     parser.add_argument("--alpha-struct", type=float, default=0.3)
     parser.add_argument("--retrain-bonus", type=float, default=0.2)
     parser.add_argument("--tau-retrain", type=float, default=0.5)
-    parser.add_argument("--s-prompt", type=float, default=2.0)
+    parser.add_argument("--s-adapter", type=float, default=1.2,
+                        help="adapter 参数下发带宽 (MB)，u=1 通信开销口径")
     parser.add_argument("--s-query", type=float, default=0.1)
     parser.add_argument("--scl-weights", type=float, default=20.0)
     return parser
@@ -86,7 +87,7 @@ def make_sys_params(args):
         "gamma": args.gamma,
         "k_min": args.k_min,
         "beta_0": args.beta_0,
-        "S_prompt": args.s_prompt,
+        "S_adapter": args.s_adapter,
         "S_query": args.s_query,
         "SCL_weights": args.scl_weights,
         "alpha_env": args.alpha_env,
@@ -98,7 +99,7 @@ def make_sys_params(args):
 
 def comm_cost(u_t, sys_params):
     if int(u_t) == 1:
-        return sys_params["S_prompt"] + sys_params["S_query"]
+        return sys_params["S_adapter"] + sys_params["S_query"]
     if int(u_t) == 2:
         return sys_params["SCL_weights"] + sys_params["S_query"]
     return 0.0

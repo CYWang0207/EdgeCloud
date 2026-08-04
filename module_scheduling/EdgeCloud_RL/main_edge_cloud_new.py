@@ -155,7 +155,7 @@ def main():
         "gamma": 10.0,
         "k_min": 0.1,
         "beta_0": 0.2,
-        "S_prompt": 2.0,
+        "S_adapter": 1.2,  # adapter 参数下发带宽消耗 (MB)，u=1 通信开销口径
         "SCL_weights": args.scl_weights,
         "S_query": 5.0,
         "alpha_env": args.alpha_env,

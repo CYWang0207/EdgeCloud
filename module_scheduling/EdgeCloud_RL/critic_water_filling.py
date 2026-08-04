@@ -15,12 +15,12 @@ def WaterFilling_Critic(v_t, u_t, w_t, E_drift, struct_drift, Y_bw, V_lya, sys_p
     # 1. 通信开销
     c_comm = 0
     if u_t == 1:
-        c_comm = sys_params['S_prompt'] + sys_params['S_query']
+        c_comm = sys_params['S_adapter'] + sys_params['S_query']
     elif u_t == 2:
         c_comm = sys_params['SCL_weights'] + sys_params['S_query']
 
     # u=0: 本地推理，同时受到环境漂移和结构性漂移惩罚
-    # u=1: 轻量 Prompt 更新，主要修复环境漂移，但无法解决结构性漂移
+    # u=1: adapter 参数同步，主要修复环境漂移，但无法解决结构性漂移
     # u=2: 重训练/持续学习更新，对严重结构性漂移提供额外收益
     if u_t == 0:
         beta_actual = beta_0 - alpha_env * E_drift - alpha_struct * struct_drift
