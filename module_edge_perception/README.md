@@ -23,7 +23,9 @@
 module_edge_perception/
 ├── model.py                          # MV-ViT 模型（EarlyFusionMultiViewViT）
 ├── adaptformer.py                    # AdaptFormer PEFT 模块（已落地，8/3 验收通过）
-├── train_adapter.py                  # Adapter 蒸馏训练（云端软标签→只训 adapter）
+├── train_adapter.py                  # 旧 VLM 类别软标签蒸馏实验（不用于漂移校正主线）
+├── train_boxcars_drift_adapter.py    # 成对干净/漂移监督的 Adapter 专家训练
+├── evaluate_boxcars_drift_adapters.py # baseline/统一/专家 Adapter 同条件评估
 ├── verify_adaptformer.py             # AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 ├── boxcars_dataset.py                # 场景二 BoxCars116k 数据加载（4逻辑视图 + view_mask）
 ├── boxcars_drift_dataset.py          # BoxCars 漂移包装
@@ -58,3 +60,42 @@ module_edge_perception/
 - 测量 TTFT、推理延迟、GPU 内存
 - Token 剪枝前后对比实验
 - 换 ViT-Tiny（如需更小模型）只需改一行 model_name 参数
+
+## BoxCars 漂移 Adapter 实验
+
+漂移校正直接使用 BoxCars 的真实类别标签，不使用通用 VLM 的车辆品牌软标签。
+训练集按样本独立采样漂移，避免旧的时间 schedule 将漂移类型与数据集顺序混淆；
+损失由漂移分类、干净/漂移 CLS 特征对齐、干净基线输出一致性三部分组成。
+
+先训练一个统一兜底 Adapter：
+
+```bash
+torchrun --standalone --nproc_per_node=2 train_boxcars_drift_adapter.py \
+  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name general \
+  --drift-types bright,dark,blur,noise,occlusion
+```
+
+只有统一 Adapter 在某类漂移上恢复不足时，再训练该类专家，例如：
+
+```bash
+torchrun --standalone --nproc_per_node=2 train_boxcars_drift_adapter.py \
+  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name blur --drift-types blur
+```
+
+统一在相同样本、相同漂移和相同强度下比较，不用训练时的随机 batch 精度下结论：
+
+```bash
+python evaluate_boxcars_drift_adapters.py \
+  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --adapter general=checkpoints/boxcars_drift_adapters/general/best.pth \
+  --adapter blur=checkpoints/boxcars_drift_adapters/blur/best.pth \
+  --severity 0.8 --output-json checkpoints/drift_adapter_comparison.json
+```
+
+建议先跑 baseline 漂移矩阵，再训练 `general`；只有专家相对 `general` 有稳定收益时才保留
+Adapter bank。当前人工模拟类型可直接作为路由 oracle，VLM 只作为未来真实场景中的可选漂移识别器。
