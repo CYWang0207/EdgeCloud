@@ -9,10 +9,14 @@ import numpy as np
 
 __all__ = [
     "AsyncPacket",
+    "DEFAULT_ACC_FLOOR",
     "NetworkSimulator",
     "mb_per_slot_to_mbps",
     "mbps_to_mb_per_slot",
 ]
+
+
+DEFAULT_ACC_FLOOR = 0.8
 
 
 MARKOV_TRANSITIONS = {
@@ -95,7 +99,7 @@ class NetworkSimulator:
         scl_weights_mb: Optional[float] = None,
         scl_weights: Optional[float] = None,
         deadline_ms: float = 200.0,
-        acc_floor: float = 0.0,
+        acc_floor: float = DEFAULT_ACC_FLOOR,
         business_min_active_views: int = 1,
         overflow_penalty: float = 5.0,
         strict_bandwidth: bool = False,
@@ -527,7 +531,7 @@ class NetworkSimulator:
         proxy_acc: float,
         transmission_success: bool = True,
     ) -> bool:
-        """Evaluate the business availability conditions for one slot."""
+        """Evaluate one slot using the Critic quality proxy_acc floor."""
         return bool(
             decision_success
             and transmission_success
