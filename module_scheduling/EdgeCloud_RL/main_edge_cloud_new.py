@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from network_sim import NetworkSimulator
+from network_sim import DEFAULT_ACC_FLOOR, NetworkSimulator
 from actor_memory import CollaborativeMemoryDNN
 from critic_water_filling import WaterFilling_Critic
 
@@ -59,7 +59,12 @@ def parse_args():
     parser.add_argument("--edge-delay-ms", type=float, default=80.0, help="T_edge 边缘推理延迟")
     parser.add_argument("--rtt-ms", type=float, default=10.0, help="往返时延，T_comm 计入")
     parser.add_argument("--deadline-ms", type=float, default=200.0, help="端到端时延硬指标上限(≤0.2s)")
-    parser.add_argument("--acc-floor", type=float, default=0.0, help="业务可用 proxy_acc 下限")
+    parser.add_argument(
+        "--acc-floor",
+        type=float,
+        default=DEFAULT_ACC_FLOOR,
+        help=f"业务可用 Critic quality proxy_acc 下限，默认 {DEFAULT_ACC_FLOOR}",
+    )
     parser.add_argument("--business-min-active-views", type=int, default=1, help="业务可用最小激活视角数")
     parser.add_argument("--bw-min-mbps", type=float, default=20.0)
     parser.add_argument("--bw-max-mbps", type=float, default=120.0)
