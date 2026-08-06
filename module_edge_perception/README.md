@@ -23,7 +23,9 @@
 module_edge_perception/
 ├── model.py                          # MV-ViT 模型（EarlyFusionMultiViewViT）
 ├── adaptformer.py                    # AdaptFormer PEFT 模块（已落地，8/3 验收通过）
-├── train_adapter.py                  # Adapter 蒸馏训练（云端软标签→只训 adapter）
+├── train_adapter.py                  # 旧 VLM 类别软标签蒸馏实验（不用于漂移校正主线）
+├── train_boxcars_drift_adapter.py    # 成对干净/漂移监督的 Adapter 专家训练
+├── evaluate_boxcars_drift_adapters.py # baseline/统一/专家 Adapter 同条件评估
 ├── verify_adaptformer.py             # AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 ├── boxcars_dataset.py                # 场景二 BoxCars116k 数据加载（4逻辑视图 + view_mask）
 ├── boxcars_drift_dataset.py          # BoxCars 漂移包装
@@ -39,22 +41,90 @@ module_edge_perception/
 └── benchmarks/                       # TTFT / 内存 / 延迟 / 一体化测量
 ```
 
-## 代码来源
-
-核心代码由学长提供，位于本地 D:\challenge\Code\code2\，包括：
-- model.py — MV-ViT 模型
-- dataset.py — ModelNet40 数据加载
-- boxcars_dataset.py — 第二场景 BoxCars116k 车辆轨迹多视图分类加载
-- test_boxcars_inference.py — BoxCars116k 到现有 MV-ViT 的无训练前向链路验证
-- train_boxcars.py — 已验证的 BoxCars116k 双卡 DDP 训练（仿照 `train.py`）
-- evaluate_boxcars.py — 在 BoxCars116k 官方划分上评估 checkpoint
-- drift_dataset.py — 漂移模拟器
-- prompt_tuning/prompt_model.py — Prompt 生成器
-- train.py / train_retrain_drift.py / train_token_prompt.py — 训练脚本
-- test.py / evaluate_train_set.py — 评估脚本
 
 ## 负责人任务
 
 - 测量 TTFT、推理延迟、GPU 内存
 - Token 剪枝前后对比实验
 - 换 ViT-Tiny（如需更小模型）只需改一行 model_name 参数
+
+## BoxCars 漂移 Adapter 实验
+
+漂移校正直接使用 BoxCars 的真实类别标签，不使用通用 VLM 的车辆品牌软标签。
+训练集按样本独立采样漂移，避免旧的时间 schedule 将漂移类型与数据集顺序混淆；
+损失由漂移分类、干净/漂移 CLS 特征对齐、干净基线输出一致性三部分组成。
+
+先训练一个统一兜底 Adapter：
+
+```bash
+torchrun --standalone --nproc_per_node=2 train_boxcars_drift_adapter.py \
+  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name general \
+  --drift-types bright,dark,blur,noise,occlusion
+```
+
+只有统一 Adapter 在某类漂移上恢复不足时，再训练该类专家，例如：
+
+```bash
+torchrun --standalone --nproc_per_node=2 train_boxcars_drift_adapter.py \
+  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name blur --drift-types blur
+```
+
+统一在相同样本、相同漂移和相同强度下比较，不用训练时的随机 batch 精度下结论：
+
+```bash
+python evaluate_boxcars_drift_adapters.py \
+  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --adapter general=checkpoints/boxcars_drift_adapters/general/best.pth \
+  --adapter blur=checkpoints/boxcars_drift_adapters/blur/best.pth \
+  --severity 0.8 --output-json checkpoints/drift_adapter_comparison.json
+```
+
+建议先跑 baseline 漂移矩阵，再训练 `general`；只有专家相对 `general` 有稳定收益时才保留
+Adapter bank。当前人工模拟类型可直接作为路由 oracle，VLM 只作为未来真实场景中的可选漂移识别器。
+
+### 连续 VLM 条件与视图可靠性（升级版）
+
+新训练链路用连续环境向量对每层 AdaptFormer 做 FiLM 调制，并显式预测每个视图的可靠性。
+不提供 VLM 缓存时可先训练纯边缘条件闭环：
+
+```bash
+python train_boxcars_drift_adapter.py \
+  --dataset-path /path/to/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name conditioned_general \
+  --independent-view-drifts --condition-dim 128
+```
+
+VLM hidden states 采用离线缓存。原始文件按 split 保存 `[N, ..., D]` tensor，先统一池化、PCA
+和归一化，再传给训练脚本：
+
+```bash
+python export_boxcars_vlm_hidden_states.py \
+  --dataset-path /path/to/BoxCars116k \
+  --model-path ../models/Qwen3-VL-8B-Instruct-4bit-group \
+  --output checkpoints/qwen3vl_train_hidden_states.pt \
+  --split train --independent-view-drifts --save-every 500
+
+python prepare_vlm_condition_cache.py \
+  --input checkpoints/qwen3vl_train_hidden_states.pt \
+  --output checkpoints/vlm_conditions_128.pt \
+  --condition-dim 128
+
+python train_boxcars_drift_adapter.py \
+  --dataset-path /path/to/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name vlm_conditioned_general \
+  --independent-view-drifts --condition-dim 128 \
+  --vlm-condition-cache checkpoints/vlm_conditions_128.pt
+```
+
+若导出被中断，使用完全相同的参数并追加 `--resume`；脚本会校验数据集、
+漂移配置、随机种子和视觉层配置后，从最后一次原子保存的样本继续。
+
+默认只训练 Adapter、FiLM、边缘环境编码器和坏视图 token；`norm` 与 `head` 保持冻结，以便
+隔离真正的漂移校正收益。需要做解冻消融时再加 `--train-norm` 或 `--train-head`。
