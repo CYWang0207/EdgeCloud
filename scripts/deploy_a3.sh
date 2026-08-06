@@ -96,7 +96,7 @@ printf '%s\n' "$commit" > "$stage_dir/DEPLOYED_COMMIT"
     | LC_ALL=C sort -z \
     | xargs -0 shasum -a 256 > MANIFEST.sha256
 )
-tar -czf "$archive_path" -C "$stage_dir" .
+COPYFILE_DISABLE=1 tar -czf "$archive_path" -C "$stage_dir" .
 
 echo "commit:       $commit"
 echo "release:      $runtime_root/releases/$commit"
@@ -146,7 +146,7 @@ rm -f "$remote_archive"
 
 (
   cd "$release_dir"
-  sha256sum -c MANIFEST.sha256
+  sha256sum -c --quiet MANIFEST.sha256
 )
 
 # Link large, untracked runtime assets without replacing tracked README files.
