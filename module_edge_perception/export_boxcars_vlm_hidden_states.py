@@ -50,7 +50,11 @@ def parse_args():
     parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument(
         "--save-every", type=int, default=0,
-        help="rewrite a recoverable partial cache every N samples; 0 saves only at the end",
+        help="atomically rewrite the partial cache every N samples; 0 saves only at the end",
+    )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="continue from a compatible partial cache already present at --output",
     )
     parser.add_argument("--trust-remote-code", action="store_true")
     return parser.parse_args()
@@ -119,12 +123,41 @@ def save_cache(path, split, features, masks, metadata):
     os.replace(temporary, path)
 
 
+def load_resume_cache(path, split, metadata, limit):
+    """Load and validate a cache checkpoint before continuing its sample loop."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"--resume requested but cache does not exist: {path}")
+    payload = torch.load(path, map_location="cpu")
+    if not isinstance(payload, dict):
+        raise ValueError("resume cache must be a dictionary payload")
+    features = payload.get(split)
+    masks = payload.get(f"{split}_view_mask")
+    if not isinstance(features, torch.Tensor) or not isinstance(masks, torch.Tensor):
+        raise ValueError(f"resume cache is missing {split!r} features or view masks")
+    if features.ndim != 4 or masks.ndim != 2:
+        raise ValueError("resume cache has unexpected feature or view-mask shape")
+    if features.shape[0] != masks.shape[0] or features.shape[0] > limit:
+        raise ValueError("resume cache length is incompatible with this export")
+    cached_metadata = payload.get("metadata")
+    if not isinstance(cached_metadata, dict):
+        raise ValueError("resume cache is missing metadata")
+    for key, expected in metadata.items():
+        if cached_metadata.get(key) != expected:
+            raise ValueError(
+                f"resume cache metadata mismatch for {key}: "
+                f"cached={cached_metadata.get(key)!r}, expected={expected!r}"
+            )
+    return list(features.unbind(0)), list(masks.unbind(0))
+
+
 def main():
     args = parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("Qwen3-VL feature export requires CUDA")
     if not 0 <= args.clean_probability < 1:
         raise ValueError("clean_probability must be in [0, 1)")
+    if args.save_every < 0:
+        raise ValueError("save_every must be non-negative")
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -184,7 +217,15 @@ def main():
         "independent_view_drifts": args.independent_view_drifts,
         "seed": args.seed,
     }
-    for index in range(limit):
+    if args.resume:
+        features, masks = load_resume_cache(args.output, args.split, metadata, limit)
+        print(f"resuming {len(features)}/{limit} samples from {args.output}", flush=True)
+    start_index = len(features)
+    if start_index == limit:
+        print(f"cache already complete: {args.output}", flush=True)
+        print(json.dumps(metadata, ensure_ascii=False, indent=2))
+        return
+    for index in range(start_index, limit):
         clean, drifted, view_mask = dataset[index][:3]
         del clean
         features.append(extract_sample(model, processor, drifted, view_mask))

@@ -108,7 +108,7 @@ python export_boxcars_vlm_hidden_states.py \
   --dataset-path /path/to/BoxCars116k \
   --model-path ../models/Qwen3-VL-8B-Instruct-4bit-group \
   --output checkpoints/qwen3vl_train_hidden_states.pt \
-  --split train --independent-view-drifts
+  --split train --independent-view-drifts --save-every 500
 
 python prepare_vlm_condition_cache.py \
   --input checkpoints/qwen3vl_train_hidden_states.pt \
@@ -122,6 +122,9 @@ python train_boxcars_drift_adapter.py \
   --independent-view-drifts --condition-dim 128 \
   --vlm-condition-cache checkpoints/vlm_conditions_128.pt
 ```
+
+若导出被中断，使用完全相同的参数并追加 `--resume`；脚本会校验数据集、
+漂移配置、随机种子和视觉层配置后，从最后一次原子保存的样本继续。
 
 默认只训练 Adapter、FiLM、边缘环境编码器和坏视图 token；`norm` 与 `head` 保持冻结，以便
 隔离真正的漂移校正收益。需要做解冻消融时再加 `--train-norm` 或 `--train-head`。

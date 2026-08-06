@@ -10,7 +10,7 @@ Usage: scripts/deploy_a3.sh [options]
 Options:
   --host HOST             SSH host (default: a3)
   --runtime-root PATH     Remote release root (default: ~/autodl-tmp/EdgeCloudRuntime)
-  --shared-root PATH      Existing data/model/output root (default: ~/autodl-tmp/EdgeCloud)
+  --shared-root PATH      Remote shared asset root (default: ~/autodl-tmp/EdgeCloudRuntime/shared)
   --no-activate           Verify the release but do not update the current symlink
   --dry-run               Build locally and print the intended deployment only
   -h, --help              Show this help
@@ -22,7 +22,7 @@ EOF
 
 remote_host="a3"
 runtime_root='~/autodl-tmp/EdgeCloudRuntime'
-shared_root='~/autodl-tmp/EdgeCloud'
+shared_root='~/autodl-tmp/EdgeCloudRuntime/shared'
 activate=1
 dry_run=0
 
@@ -169,7 +169,7 @@ for asset_group in data models; do
   fi
 done
 
-checkpoint_source="$shared_root/module_edge_perception/checkpoints"
+checkpoint_source="$shared_root/checkpoints"
 checkpoint_target="$release_dir/module_edge_perception/checkpoints"
 if [[ -d "$checkpoint_source" && ! -e "$checkpoint_target" ]]; then
   ln -s "$checkpoint_source" "$checkpoint_target"
