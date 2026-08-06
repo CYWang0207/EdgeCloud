@@ -10,9 +10,17 @@ import numpy as np
 __all__ = [
     "AsyncPacket",
     "NetworkSimulator",
+    "DEFAULT_ACC_FLOOR",
     "mb_per_slot_to_mbps",
     "mbps_to_mb_per_slot",
 ]
+
+
+# 业务可用四条件中 proxy_acc 下限的共享默认值。main_edge_cloud_new.py 与
+# comparison_baselines 均引用此常量，保证"我们方法"与基线在业务保持率口径上一致。
+# 取 0.5：u=0 在重漂移下 proxy_acc=1-0.4*E-0.3*S 可能跌破 0.5（业务不达标），
+# u=1/u=2 维持高 proxy_acc（业务达标），从而让 u 选择差异体现到业务保持率上。
+DEFAULT_ACC_FLOOR = 0.5
 
 
 MARKOV_TRANSITIONS = {
@@ -87,7 +95,7 @@ class NetworkSimulator:
         down_loss_rate: float = 1.0,
         rtt_ms: float = 10.0,
         edge_delay_ms: float = 80.0,
-        prompt_cloud_delay_ms: float = 30.0,
+        adapter_cloud_delay_ms: float = 30.0,
         retrain_cloud_delay_ms: float = 0.0,
         adapter_size_mb: float = 1.2,
         query_size_mb: float = 5.0,
@@ -134,7 +142,7 @@ class NetworkSimulator:
         self.down_loss_rate = float(down_loss_rate)
         self.rtt_ms = float(rtt_ms)
         self.edge_delay_ms = float(edge_delay_ms)
-        self.prompt_cloud_delay_ms = float(prompt_cloud_delay_ms)
+        self.adapter_cloud_delay_ms = float(adapter_cloud_delay_ms)
         self.retrain_cloud_delay_ms = float(retrain_cloud_delay_ms)
         self.adapter_size_mb = float(adapter_size_mb)
         self.query_size_mb = float(query_size_mb)
@@ -550,7 +558,7 @@ class NetworkSimulator:
 
     def background_ready_delay_slots(self, u: Optional[int]) -> int:
         if u == 1:
-            delay_ms = self.prompt_cloud_delay_ms
+            delay_ms = self.adapter_cloud_delay_ms
         elif u == 2 and not self.sync_u2:
             delay_ms = self.retrain_cloud_delay_ms
         else:
