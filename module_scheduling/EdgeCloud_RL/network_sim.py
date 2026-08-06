@@ -91,7 +91,7 @@ class NetworkSimulator:
         down_loss_rate: float = 1.0,
         rtt_ms: float = 10.0,
         edge_delay_ms: float = 80.0,
-        prompt_cloud_delay_ms: float = 30.0,
+        adapter_cloud_delay_ms: float = 30.0,
         retrain_cloud_delay_ms: float = 0.0,
         adapter_size_mb: float = 1.2,
         query_size_mb: float = 5.0,
@@ -138,7 +138,7 @@ class NetworkSimulator:
         self.down_loss_rate = float(down_loss_rate)
         self.rtt_ms = float(rtt_ms)
         self.edge_delay_ms = float(edge_delay_ms)
-        self.prompt_cloud_delay_ms = float(prompt_cloud_delay_ms)
+        self.adapter_cloud_delay_ms = float(adapter_cloud_delay_ms)
         self.retrain_cloud_delay_ms = float(retrain_cloud_delay_ms)
         self.adapter_size_mb = float(adapter_size_mb)
         self.query_size_mb = float(query_size_mb)
@@ -554,7 +554,7 @@ class NetworkSimulator:
 
     def background_ready_delay_slots(self, u: Optional[int]) -> int:
         if u == 1:
-            delay_ms = self.prompt_cloud_delay_ms
+            delay_ms = self.adapter_cloud_delay_ms
         elif u == 2 and not self.sync_u2:
             delay_ms = self.retrain_cloud_delay_ms
         else:
