@@ -134,7 +134,7 @@ MV-ViT + VLM-KD adapter
 ## 运行示例
 
 ```bash
-cd ~/autodl-tmp/EdgeCloud/module_edge_perception
+cd ~/autodl-tmp/EdgeCloudRuntime/current/module_edge_perception
 
 python export_boxcars_vlm_soft_labels.py \
   --dataset-path ../data/BoxCars116k_kaggle/BoxCars116k \
