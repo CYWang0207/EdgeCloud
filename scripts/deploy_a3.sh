@@ -89,6 +89,11 @@ archive_path="$deploy_tmp/edgecloud-${commit}.tar.gz"
 mkdir -p "$stage_dir"
 git archive "$commit" | tar -xf - -C "$stage_dir"
 printf '%s\n' "$commit" > "$stage_dir/DEPLOYED_COMMIT"
+# macOS can attach a provenance xattr while extracting even a clean Git
+# archive; remove it so GNU tar on the Linux host sees a portable archive.
+if command -v xattr >/dev/null 2>&1; then
+  xattr -rc "$stage_dir"
+fi
 
 (
   cd "$stage_dir"
