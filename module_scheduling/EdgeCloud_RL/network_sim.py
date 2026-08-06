@@ -18,9 +18,9 @@ __all__ = [
 
 # 业务可用四条件中 proxy_acc 下限的共享默认值。main_edge_cloud_new.py 与
 # comparison_baselines 均引用此常量，保证"我们方法"与基线在业务保持率口径上一致。
-# 取 0.5：u=0 在重漂移下 proxy_acc=1-0.4*E-0.3*S 可能跌破 0.5（业务不达标），
+# 取 0.8：u=0 在重漂移下 proxy_acc=1-0.4*E-0.3*S 可能跌破 0.8（业务不达标），
 # u=1/u=2 维持高 proxy_acc（业务达标），从而让 u 选择差异体现到业务保持率上。
-DEFAULT_ACC_FLOOR = 0.5
+DEFAULT_ACC_FLOOR = 0.8
 
 
 MARKOV_TRANSITIONS = {
