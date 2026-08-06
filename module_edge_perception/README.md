@@ -128,3 +128,26 @@ python train_boxcars_drift_adapter.py \
 
 默认只训练 Adapter、FiLM、边缘环境编码器和坏视图 token；`norm` 与 `head` 保持冻结，以便
 隔离真正的漂移校正收益。需要做解冻消融时再加 `--train-norm` 或 `--train-head`。
+
+## ModelNet40 相机退化 Adapter 实验
+
+ModelNet40 的规整渲染图对高频噪声特别敏感，但正式 Adapter 不应成为单一噪声补丁。训练使用
+按失效敏感度加权的相机退化混合：曝光/伽马+色偏+局部阴影（25%）、失焦（15%）、
+Poisson-Gaussian 传感器噪声（30%）、降采样量化压缩（15%）和仅一视图的局部遮挡（15%）。
+这些替代了全局 bright/dark 倍率和四视图同形噪声的玩具式干预。
+
+severity 始终保持在 `[0, 1]`：训练采样 `0.4–0.8`、保留 20% 干净样本；评测输出完整退化矩阵，
+并额外报告 sensor-noise 的 `0.8`、`1.0` 两档。后续应依据矩阵结果校准各类的参数映射，而不是扩张 severity 定义域。
+
+```bash
+python train_modelnet_drift_adapter.py \
+  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/modelnet40v2png_ori4 \
+  --baseline-checkpoint checkpoints/mv_vit_token_epoch_30.pth \
+  --save-dir checkpoints/modelnet40_drift_adapters/camera_mixture
+
+python evaluate_modelnet_drift_adapter.py \
+  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/modelnet40v2png_ori4 \
+  --baseline-checkpoint checkpoints/mv_vit_token_epoch_30.pth \
+  --adapter-checkpoint checkpoints/modelnet40_drift_adapters/camera_mixture/best.pth \
+  --output-json outputs/modelnet40_camera_adapter_impact.json
+```
