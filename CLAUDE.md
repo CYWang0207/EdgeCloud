@@ -171,8 +171,8 @@ EdgeCloud/
 ### 关键处理
 - **断联 → 强制 u=0**（只保留本地自治候选）
 - **超带宽 → 软罚或硬过滤**：`G_effective = G_raw - overflow_penalty × (comm_overflow / B_t)`；`--strict-bandwidth` 直接过滤
-- **u=2 默认异步后台**：本时隙先用本地旧模型出决策，权重包进 Q_net 积压队列，后续容量充足再消化；`--sync-u2` 才实时
-- **端到端时延**：`T_e2e = T_edge + T_comm + T_cloud`；`T_comm = 8 × realtime_comm / R_t × 1000 + RTT`；u=0 时 T_comm=0（特判，不加 RTT）；T_cloud 按动作分（u=0→0、u=1→VLM推理时延、u=2异步→0）
+- **u=1 / u=2 默认异步后台**：本时隙先用本地旧模型出决策，adapter 参数包(u=1)或重训权重(u=2)进 Q_net 积压队列，后续容量充足再消化；`--sync-u2` 才让 u=2 实时同步
+- **端到端时延**：`T_e2e = T_edge + T_comm + T_cloud`；`T_comm = 8 × realtime_comm / R_t × 1000 + RTT`；u=0 时 T_comm=0（特判，不加 RTT）；T_cloud 按动作分（u=0→0、u=1异步→0、u=2异步→0、u=2同步(`--sync-u2`)→重训时延）。u=1/u=2 异步时当步 e2e≈T_edge，权重包后台传输完成情况由业务保持率反映
 - **业务可用四条件（防"断联切本地=100%可用"虚高）**：`business_available = decision_success AND e2e≤deadline AND active_views≥min AND proxy_acc≥acc_floor`
 
 ### NetworkSimulator 接口（王成洋 8/4 接主循环对齐）
