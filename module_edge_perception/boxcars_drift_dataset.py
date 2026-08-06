@@ -84,6 +84,7 @@ class PairedBoxCarsDriftDataset(Dataset):
         severity_min=0.35,
         severity_max=1.0,
         clean_probability=0.15,
+        independent_view_drifts=False,
         seed=123,
         normalize=True,
     ):
@@ -101,6 +102,7 @@ class PairedBoxCarsDriftDataset(Dataset):
         self.severity_min = float(severity_min)
         self.severity_max = float(severity_max)
         self.clean_probability = float(clean_probability)
+        self.independent_view_drifts = bool(independent_view_drifts)
         self.seed = int(seed)
         self.normalizer = transforms.Normalize(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -126,11 +128,19 @@ class PairedBoxCarsDriftDataset(Dataset):
         )
         return self.drift_types[type_index], float(severity)
 
+    def _sample_view_spec(self, index, view_index):
+        if not self.independent_view_drifts:
+            return self._sample_spec(index)
+        return self._sample_spec(index * 31 + view_index * 1049)
+
     def __getitem__(self, index):
         images, view_mask, label, metadata = self.base_dataset[index]
-        drift_type, severity = self._sample_spec(index)
-        clean, drifted = [], []
+        clean, drifted, quality_targets = [], [], []
+        drift_types, severities = [], []
         for view_index, image in enumerate(images):
+            drift_type, severity = self._sample_view_spec(index, view_index)
+            drift_types.append(drift_type)
+            severities.append(severity)
             clean_image = image
             drifted_image = apply_drift_to_image(
                 image,
@@ -143,12 +153,17 @@ class PairedBoxCarsDriftDataset(Dataset):
                 drifted_image = self.normalizer(drifted_image)
             clean.append(clean_image)
             drifted.append(drifted_image)
+            quality_targets.append(1.0 - severity)
+        drift_description = ",".join(drift_types)
+        mean_severity = sum(severities) / len(severities)
         return (
             torch.stack(clean),
             torch.stack(drifted),
             view_mask,
             label,
             metadata,
-            drift_type,
-            severity,
+            drift_description,
+            mean_severity,
+            torch.tensor(quality_targets, dtype=torch.float32) * view_mask,
+            index,
         )

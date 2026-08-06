@@ -58,8 +58,17 @@ def parse_args():
     parser.add_argument("--severity-min", type=float, default=0.35)
     parser.add_argument("--severity-max", type=float, default=1.0)
     parser.add_argument("--clean-probability", type=float, default=0.15)
+    parser.add_argument("--independent-view-drifts", action="store_true")
     parser.add_argument("--feature-weight", type=float, default=0.25)
     parser.add_argument("--consistency-weight", type=float, default=0.20)
+    parser.add_argument("--condition-dim", type=int, default=128)
+    parser.add_argument("--vlm-condition-cache", default="")
+    parser.add_argument("--vlm-weight", type=float, default=0.10)
+    parser.add_argument("--quality-weight", type=float, default=0.10)
+    parser.add_argument("--teacher-condition-probability", type=float, default=0.50)
+    parser.add_argument("--null-condition-probability", type=float, default=0.20)
+    parser.add_argument("--train-norm", action="store_true")
+    parser.add_argument("--train-head", action="store_true")
     parser.add_argument("--save-dir", default="./checkpoints/boxcars_drift_adapters")
     parser.add_argument("--model-name", default="vit_small_patch16_224")
     parser.add_argument("--num-views", type=int, default=4)
@@ -120,6 +129,7 @@ def make_dataset(args, split, clean_probability):
         severity_min=args.severity_min,
         severity_max=args.severity_max,
         clean_probability=clean_probability,
+        independent_view_drifts=args.independent_view_drifts,
         seed=args.seed + (0 if split == "train" else 1_000_003),
     )
 
@@ -151,7 +161,9 @@ def make_loaders(args, distributed, rank, world_size):
 
 
 def paired_loss(
-    model, clean, drifted, view_mask, labels, feature_weight, consistency_weight
+    model, clean, drifted, view_mask, labels, quality_targets,
+    teacher_condition, active_condition, feature_weight, consistency_weight,
+    vlm_weight, quality_weight,
 ):
     raw = model.module if isinstance(model, DDP) else model
     # The disabled pass is the frozen clean-domain reference.  norm/head are
@@ -159,12 +171,15 @@ def paired_loss(
     set_adapter_enabled(raw, False)
     with torch.no_grad():
         clean_logits, clean_target = raw(
-            clean, view_mask=view_mask, return_features=True
+            clean, view_mask=view_mask, return_features=True,
+            apply_quality_gate=False,
         )
     set_adapter_enabled(raw, True)
-    drift_logits, drift_features = model(
-        drifted, view_mask=view_mask, return_features=True
+    drift_logits, aux = model(
+        drifted, view_mask=view_mask, condition_vector=active_condition,
+        return_aux=True,
     )
+    drift_features = aux["features"]
     classification = F.cross_entropy(drift_logits, labels)
     consistency = F.kl_div(
         F.log_softmax(drift_logits.float(), dim=1),
@@ -174,15 +189,55 @@ def paired_loss(
     alignment = 1.0 - F.cosine_similarity(
         drift_features.float(), clean_target.float(), dim=1
     ).mean()
+    vlm_distill = drift_features.new_zeros(())
+    if teacher_condition is not None:
+        vlm_distill = 1.0 - F.cosine_similarity(
+            aux["edge_condition"].float(), teacher_condition.float(), dim=1
+        ).mean()
+    quality = F.mse_loss(
+        aux["view_quality"].float(), quality_targets.float()
+    )
     total = (
         classification
         + consistency_weight * consistency
         + feature_weight * alignment
+        + vlm_weight * vlm_distill
+        + quality_weight * quality
     )
     return (
         total, classification.detach(), consistency.detach(),
-        alignment.detach(), drift_logits,
+        alignment.detach(), vlm_distill.detach(), quality.detach(), drift_logits,
     )
+
+
+def load_condition_cache(path, split, expected_length, condition_dim):
+    if not path:
+        return None
+    payload = torch.load(path, map_location="cpu")
+    if isinstance(payload, dict):
+        payload = payload.get(split, payload.get("conditions"))
+    if not isinstance(payload, torch.Tensor) or payload.ndim != 2:
+        raise ValueError("VLM cache must contain a [samples, condition_dim] tensor")
+    if payload.shape != (expected_length, condition_dim):
+        raise ValueError(
+            f"VLM cache shape must be {(expected_length, condition_dim)}, "
+            f"got {tuple(payload.shape)}"
+        )
+    return F.normalize(payload.float(), dim=-1)
+
+
+def choose_active_condition(batch_size, teacher_condition, args, device):
+    unit = random.random()
+    teacher_probability = (
+        args.teacher_condition_probability if teacher_condition is not None else 0.0
+    )
+    if teacher_condition is not None and unit < teacher_probability:
+        return teacher_condition
+    if unit < teacher_probability + args.null_condition_probability:
+        return torch.zeros(
+            batch_size, args.condition_dim, device=device, dtype=torch.float32
+        )
+    return None
 
 
 @torch.no_grad()
@@ -212,8 +267,15 @@ def main():
     args = parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("drift adapter training requires CUDA")
-    if args.feature_weight < 0 or args.consistency_weight < 0:
+    if min(args.feature_weight, args.consistency_weight, args.vlm_weight,
+           args.quality_weight) < 0:
         raise ValueError("loss weights must be non-negative")
+    if not 0 <= args.teacher_condition_probability <= 1:
+        raise ValueError("teacher condition probability must be in [0, 1]")
+    if not 0 <= args.null_condition_probability <= 1:
+        raise ValueError("null condition probability must be in [0, 1]")
+    if args.teacher_condition_probability + args.null_condition_probability > 1:
+        raise ValueError("teacher + null condition probabilities must not exceed 1")
     distributed, local_rank, rank, world_size = setup_distributed()
     device = torch.device("cuda", local_rank)
     random.seed(args.seed + rank)
@@ -225,8 +287,15 @@ def main():
         args.model_name, args.num_views, len(train_set.classes), pretrained=False
     )
     load_baseline(model, args.baseline_checkpoint)
-    attach_adaptformer(model, r=args.r)
+    model.attach_drift_conditioner(condition_dim=args.condition_dim)
+    attach_adaptformer(model, r=args.r, condition_dim=args.condition_dim)
     freeze_backbone(model)
+    if not args.train_norm:
+        for parameter in model.norm.parameters():
+            parameter.requires_grad = False
+    if not args.train_head:
+        for parameter in model.head.parameters():
+            parameter.requires_grad = False
     model.to(device)
     if distributed:
         # The clean reference forwards with adapters disabled, so some adapter
@@ -235,6 +304,9 @@ def main():
         model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
 
     raw = model.module if distributed else model
+    condition_cache = load_condition_cache(
+        args.vlm_condition_cache, "train", len(train_set), args.condition_dim
+    )
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad],
         lr=args.lr, weight_decay=args.weight_decay,
@@ -256,7 +328,7 @@ def main():
             train_sampler.set_epoch(epoch)
         model.train()
         optimizer.zero_grad(set_to_none=True)
-        totals = [0.0] * 5
+        totals = [0.0] * 7
         limit = min(len(train_loader), args.max_train_batches or len(train_loader))
         for batch_index, batch in enumerate(train_loader):
             if args.max_train_batches and batch_index >= args.max_train_batches:
@@ -264,13 +336,25 @@ def main():
             clean, drifted, view_mask, labels = [
                 item.to(device, non_blocking=True) for item in batch[:4]
             ]
+            quality_targets = batch[-2].to(device, non_blocking=True)
+            sample_indices = batch[-1].long()
+            teacher_condition = None
+            if condition_cache is not None:
+                teacher_condition = condition_cache[sample_indices].to(
+                    device, non_blocking=True
+                )
+            active_condition = choose_active_condition(
+                labels.shape[0], teacher_condition, args, device
+            )
             should_step = (batch_index + 1) % args.accumulation_steps == 0 or batch_index + 1 == limit
             sync = model.no_sync() if distributed and not should_step else nullcontext()
             with sync:
                 with torch.autocast("cuda", dtype=amp_dtype):
-                    loss, cls, consistency, alignment, logits = paired_loss(
-                        model, clean, drifted, view_mask, labels,
+                    loss, cls, consistency, alignment, vlm_distill, quality, logits = paired_loss(
+                        model, clean, drifted, view_mask, labels, quality_targets,
+                        teacher_condition, active_condition,
                         args.feature_weight, args.consistency_weight,
+                        args.vlm_weight, args.quality_weight,
                     )
                     scaled_loss = loss / args.accumulation_steps
                 scaler.scale(scaled_loss).backward()
@@ -283,18 +367,21 @@ def main():
             totals[1] += cls.item() * n
             totals[2] += consistency.item() * n
             totals[3] += alignment.item() * n
-            totals[4] += n
+            totals[4] += vlm_distill.item() * n
+            totals[5] += quality.item() * n
+            totals[6] += n
         scheduler.step()
         totals = reduce(totals, device, distributed)
         val_loss, drift_acc, clean_acc = evaluate(
             model, val_loader, device, distributed, args.max_val_batches, amp_dtype
         )
         if rank == 0:
-            n = max(totals[4], 1)
+            n = max(totals[6], 1)
             print(
                 f"epoch={epoch + 1}/{args.epochs} loss={totals[0]/n:.4f} "
                 f"cls={totals[1]/n:.4f} consistency={totals[2]/n:.4f} "
-                f"align={totals[3]/n:.4f} val_loss={val_loss:.4f} "
+                f"align={totals[3]/n:.4f} vlm={totals[4]/n:.4f} "
+                f"quality={totals[5]/n:.4f} val_loss={val_loss:.4f} "
                 f"val_drift_acc={drift_acc:.4f} val_clean_acc={clean_acc:.4f}",
                 flush=True,
             )
@@ -306,6 +393,7 @@ def main():
                 "validation_drift_accuracy": drift_acc,
                 "validation_clean_accuracy": clean_acc,
                 "r": args.r,
+                "condition_dim": args.condition_dim,
                 "task": args.task,
                 "classes": train_set.classes,
                 "args": vars(args),

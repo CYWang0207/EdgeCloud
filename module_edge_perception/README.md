@@ -99,3 +99,42 @@ python evaluate_boxcars_drift_adapters.py \
 
 建议先跑 baseline 漂移矩阵，再训练 `general`；只有专家相对 `general` 有稳定收益时才保留
 Adapter bank。当前人工模拟类型可直接作为路由 oracle，VLM 只作为未来真实场景中的可选漂移识别器。
+
+### 连续 VLM 条件与视图可靠性（升级版）
+
+新训练链路用连续环境向量对每层 AdaptFormer 做 FiLM 调制，并显式预测每个视图的可靠性。
+不提供 VLM 缓存时可先训练纯边缘条件闭环：
+
+```bash
+python train_boxcars_drift_adapter.py \
+  --dataset-path /path/to/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name conditioned_general \
+  --independent-view-drifts --condition-dim 128
+```
+
+VLM hidden states 采用离线缓存。原始文件按 split 保存 `[N, ..., D]` tensor，先统一池化、PCA
+和归一化，再传给训练脚本：
+
+```bash
+python export_boxcars_vlm_hidden_states.py \
+  --dataset-path /path/to/BoxCars116k \
+  --model-path ../models/Qwen3-VL-8B-Instruct-4bit-group \
+  --output checkpoints/qwen3vl_train_hidden_states.pt \
+  --split train --independent-view-drifts
+
+python prepare_vlm_condition_cache.py \
+  --input checkpoints/qwen3vl_train_hidden_states.pt \
+  --output checkpoints/vlm_conditions_128.pt \
+  --condition-dim 128
+
+python train_boxcars_drift_adapter.py \
+  --dataset-path /path/to/BoxCars116k \
+  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
+  --expert-name vlm_conditioned_general \
+  --independent-view-drifts --condition-dim 128 \
+  --vlm-condition-cache checkpoints/vlm_conditions_128.pt
+```
+
+默认只训练 Adapter、FiLM、边缘环境编码器和坏视图 token；`norm` 与 `head` 保持冻结，以便
+隔离真正的漂移校正收益。需要做解冻消融时再加 `--train-norm` 或 `--train-head`。

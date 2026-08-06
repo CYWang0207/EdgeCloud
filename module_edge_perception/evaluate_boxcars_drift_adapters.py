@@ -50,7 +50,7 @@ def load_baseline(model, path):
 
 
 @torch.no_grad()
-def accuracy(model, loader, device, amp_dtype, use_clean=False):
+def accuracy(model, loader, device, amp_dtype, use_clean=False, conditioned=True):
     correct = count = 0
     loss_sum = 0.0
     for batch_index, batch in enumerate(loader):
@@ -62,7 +62,9 @@ def accuracy(model, loader, device, amp_dtype, use_clean=False):
         view_mask = view_mask.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
         with torch.autocast("cuda", dtype=amp_dtype):
-            logits = model(images, view_mask=view_mask)
+            logits = model(
+                images, view_mask=view_mask, apply_quality_gate=conditioned
+            )
             loss_sum += torch.nn.functional.cross_entropy(
                 logits, labels, reduction="sum"
             ).item()
@@ -105,11 +107,21 @@ def main():
     base = BoxCarsMultiView(
         args.dataset_path, args.split, args.task, args.num_views, transform
     )
+    condition_dims = []
+    for _name, path in args.adapter:
+        payload = torch.load(path, map_location="cpu")
+        if isinstance(payload, dict) and payload.get("condition_dim"):
+            condition_dims.append(int(payload["condition_dim"]))
+    if condition_dims and len(set(condition_dims)) != 1:
+        raise ValueError("all conditioned adapters must use the same condition_dim")
+    condition_dim = condition_dims[0] if condition_dims else 0
     model = EarlyFusionMultiViewViT(
         args.model_name, args.num_views, len(base.classes), pretrained=False
     )
     load_baseline(model, args.baseline_checkpoint)
-    attach_adaptformer(model, r=args.r)
+    if condition_dim:
+        model.attach_drift_conditioner(condition_dim=condition_dim)
+    attach_adaptformer(model, r=args.r, condition_dim=condition_dim)
     model.to(device).eval()
     amp_dtype = torch.bfloat16 if args.amp_dtype == "bf16" else torch.float16
     loaders = {
@@ -124,10 +136,12 @@ def main():
     set_adapter_enabled(model, False)
     first_loader = next(iter(loaders.values()))
     results["baseline"]["clean"] = accuracy(
-        model, first_loader, device, amp_dtype, use_clean=True
+        model, first_loader, device, amp_dtype, use_clean=True, conditioned=False
     )
     for drift, loader in loaders.items():
-        results["baseline"][drift] = accuracy(model, loader, device, amp_dtype)
+        results["baseline"][drift] = accuracy(
+            model, loader, device, amp_dtype, conditioned=False
+        )
     for name, path in args.adapter:
         load_adapter_checkpoint(model, path, device="cpu")
         set_adapter_enabled(model, True)
