@@ -144,7 +144,7 @@ if [[ -e "$release_dir" ]]; then
   echo "release already exists; verifying immutable contents"
 else
   mkdir "$temporary_release"
-  tar -xzf "$remote_archive" -C "$temporary_release"
+  tar --warning=no-unknown-keyword -xzf "$remote_archive" -C "$temporary_release"
   mv "$temporary_release" "$release_dir"
 fi
 rm -f "$remote_archive"
