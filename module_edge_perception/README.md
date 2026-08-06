@@ -139,6 +139,16 @@ Poisson-Gaussian 传感器噪声（30%）、降采样量化压缩（15%）和仅
 severity 始终保持在 `[0, 1]`：训练采样 `0.4–0.8`、保留 20% 干净样本；评测输出完整退化矩阵，
 并额外报告 sensor-noise 的 `0.8`、`1.0` 两档。后续应依据矩阵结果校准各类的参数映射，而不是扩张 severity 定义域。
 
+训练前必须先用冻结 baseline 在完整 test 上扫描，并将每类固定到最接近 10pp 准确率下降的参数；若某类
+在整个 `[0,1]` 网格都不能达到目标，先改该类生成映射，而不是带着未校准干预训练：
+
+```bash
+python calibrate_modelnet_camera_corruptions.py \
+  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/modelnet40v2png_ori4 \
+  --baseline-checkpoint checkpoints/mv_vit_token_epoch_30.pth \
+  --output-json outputs/modelnet40_camera_calibration.json
+```
+
 ```bash
 python train_modelnet_drift_adapter.py \
   --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/modelnet40v2png_ori4 \

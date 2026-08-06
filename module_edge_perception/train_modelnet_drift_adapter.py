@@ -39,13 +39,30 @@ def drift_list(value):
     return result
 
 
+def severity_map(value):
+    result = {}
+    for item in value.split(","):
+        name, separator, raw = item.strip().partition("=")
+        if not separator or name not in DRIFTS:
+            raise argparse.ArgumentTypeError("fixed-severities must be NAME=VALUE pairs using supported drift names")
+        try:
+            level = float(raw)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(f"invalid severity: {raw}") from exc
+        if not 0 <= level <= 1:
+            raise argparse.ArgumentTypeError("fixed severities must be in [0, 1]")
+        result[name] = level
+    return result
+
+
 class PairedModelNetDrift(Dataset):
     """Aligned clean/corrupted pairs; train assignments are deterministic."""
     def __init__(self, base, drift_types, severity_min, severity_max, clean_probability,
-                 seed, drift_weights=None, fixed_drift=None, fixed_severity=None):
+                 seed, drift_weights=None, fixed_severities=None, fixed_drift=None, fixed_severity=None):
         self.base, self.drift_types = base, drift_types
         self.severity_min, self.severity_max = severity_min, severity_max
         self.clean_probability, self.seed = clean_probability, seed
+        self.fixed_severities = fixed_severities or {}
         self.drift_weights = torch.tensor(
             drift_weights if drift_weights is not None else [1.] * len(drift_types),
             dtype=torch.float,
@@ -71,7 +88,9 @@ class PairedModelNetDrift(Dataset):
                 kind, severity = "normal", 0.0
             else:
                 kind = self.drift_types[torch.multinomial(self.drift_weights, 1, generator=generator).item()]
-                severity = self.severity_min + (self.severity_max - self.severity_min) * torch.rand((), generator=generator).item()
+                severity = self.fixed_severities.get(kind)
+                if severity is None:
+                    severity = self.severity_min + (self.severity_max - self.severity_min) * torch.rand((), generator=generator).item()
         corrupted = apply_camera_corruption(clean, kind, severity, self.seed + index * 1009)
         return torch.stack([NORM(image) for image in clean]), torch.stack([NORM(image) for image in corrupted]), label
 
@@ -93,11 +112,14 @@ def apply_camera_corruption(views, kind, severity, seed):
         if kind == "illumination":
             # Exposure response (gamma), mild colour-temperature shift, and a
             # smooth local shadow/vignette rather than a uniform dark image.
-            gamma = 1.0 + (0.75 * severity if view_index % 2 else -0.45 * severity)
+            underexposed = bool(torch.randint(2, (), generator=generator))
+            gamma = 1.0 + (1.65 * severity if underexposed else -0.65 * severity)
             output = image.clamp(1e-4, 1).pow(gamma)
-            cast = torch.tensor([1 + .12 * severity, 1., 1 - .10 * severity], dtype=image.dtype).view(3, 1, 1)
+            cast = torch.tensor([1 + .22 * severity, 1., 1 - .18 * severity], dtype=image.dtype).view(3, 1, 1)
             yy, xx = torch.meshgrid(torch.linspace(-1, 1, image.shape[1]), torch.linspace(-1, 1, image.shape[2]), indexing="ij")
-            shadow = 1 - (.28 * severity) * ((xx - .25) ** 2 + (yy + .15) ** 2).clamp(max=1)
+            center_x = -.35 + .7 * torch.rand((), generator=generator).item()
+            center_y = -.35 + .7 * torch.rand((), generator=generator).item()
+            shadow = 1 - .75 * severity * torch.exp(-((xx - center_x) ** 2 + (yy - center_y) ** 2) / .18)
             output = output * cast * shadow.to(image.dtype)
         elif kind == "defocus":
             sigma = .25 + 1.45 * severity
@@ -105,9 +127,12 @@ def apply_camera_corruption(views, kind, severity, seed):
         elif kind == "sensor_noise":
             # Poisson-Gaussian sensor noise is signal-dependent and differs by
             # camera/view, unlike adding one identical Gaussian field to all views.
-            gain = 18.0 / (1 + 12 * severity)
+            # 500 is a clean rendered-image photon budget; the nonlinear fall
+            # to ~20 at severity=1 puts the useful calibration range inside
+            # [0,1] instead of making 0.1 catastrophic.
+            gain = 500.0 / (1 + 24 * severity * severity)
             shot = torch.poisson((image * gain).clamp_min(0), generator=torch.Generator().manual_seed(local_seed)) / gain
-            read = torch.randn(image.shape, generator=torch.Generator().manual_seed(local_seed + 1), dtype=image.dtype) * (.008 + .045 * severity)
+            read = torch.randn(image.shape, generator=torch.Generator().manual_seed(local_seed + 1), dtype=image.dtype) * (.002 + .020 * severity)
             output = shot + read
         elif kind == "compression":
             # Render-resize-quantize approximates codec/rate degradation without
@@ -136,11 +161,14 @@ def args_parser():
     parser.add_argument("--dataset-path", required=True)
     parser.add_argument("--baseline-checkpoint", required=True)
     parser.add_argument("--save-dir", required=True)
-    parser.add_argument("--drift-types", type=drift_list, default=DRIFTS)
-    parser.add_argument("--drift-weights", type=float, nargs="+", default=DEFAULT_DRIFT_WEIGHTS,
+    parser.add_argument("--drift-types", type=drift_list, default=("illumination", "defocus", "sensor_noise"))
+    parser.add_argument("--drift-weights", type=float, nargs="+", default=(.30, .30, .40),
                         help="mixture weights aligned with drift-types")
-    parser.add_argument("--severity-min", type=float, default=.4)
-    parser.add_argument("--severity-max", type=float, default=.8)
+    parser.add_argument("--fixed-severities", type=severity_map,
+                        default={"illumination": 1.0, "defocus": .2, "sensor_noise": .4},
+                        help="calibrated NAME=VALUE severities; these override the sampled range")
+    parser.add_argument("--severity-min", type=float, default=.4, help="only used by drift types without fixed-severities")
+    parser.add_argument("--severity-max", type=float, default=.8, help="only used by drift types without fixed-severities")
     parser.add_argument("--clean-probability", type=float, default=.2)
     parser.add_argument("--feature-weight", type=float, default=.25)
     parser.add_argument("--consistency-weight", type=float, default=.20)
@@ -185,10 +213,10 @@ def main():
     torch.manual_seed(args.seed)
     device = torch.device("cuda")
     transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
-    train = PairedModelNetDrift(ModelNet40MultiView(args.dataset_path, "train", transform, args.num_views), args.drift_types, args.severity_min, args.severity_max, args.clean_probability, args.seed, drift_weights=args.drift_weights)
+    train = PairedModelNetDrift(ModelNet40MultiView(args.dataset_path, "train", transform, args.num_views), args.drift_types, args.severity_min, args.severity_max, args.clean_probability, args.seed, drift_weights=args.drift_weights, fixed_severities=args.fixed_severities)
     if len(args.drift_weights) != len(args.drift_types):
         raise ValueError("drift-weights length must match drift-types")
-    validation = PairedModelNetDrift(ModelNet40MultiView(args.dataset_path, "test", transform, args.num_views), args.drift_types, .8, .8, 0., args.seed + 1, drift_weights=args.drift_weights, fixed_drift="sensor_noise", fixed_severity=.8)
+    validation = PairedModelNetDrift(ModelNet40MultiView(args.dataset_path, "test", transform, args.num_views), args.drift_types, .4, .4, 0., args.seed + 1, drift_weights=args.drift_weights, fixed_drift="sensor_noise", fixed_severity=.4)
     loaders = [DataLoader(data, batch_size=args.batch_size, shuffle=(i == 0), num_workers=args.num_workers, pin_memory=True, persistent_workers=args.num_workers > 0) for i, data in enumerate((train, validation))]
     model = EarlyFusionMultiViewViT(args.model_name, args.num_views, len(train.classes), pretrained=False)
     load_baseline(model, args.baseline_checkpoint); attach_adaptformer(model, args.r); freeze_backbone(model); model.to(device)
@@ -197,7 +225,7 @@ def main():
     dtype = torch.bfloat16 if args.amp_dtype == "bf16" else torch.float16
     scaler = torch.amp.GradScaler("cuda", enabled=args.amp_dtype == "fp16")
     os.makedirs(args.save_dir, exist_ok=True); best = -1.
-    print(f"ModelNet40 camera-mixture adapter: train={len(train)}, test={len(validation)}, adapter_params={count_adapter_parameters(model)}, drifts={args.drift_types}, weights={args.drift_weights}")
+    print(f"ModelNet40 camera-mixture adapter: train={len(train)}, test={len(validation)}, adapter_params={count_adapter_parameters(model)}, drifts={args.drift_types}, weights={args.drift_weights}, fixed_severities={args.fixed_severities}")
     for epoch in range(args.epochs):
         model.train(); loss_sum = correct = count = 0
         for step, (clean, corrupt, labels) in enumerate(loaders[0]):

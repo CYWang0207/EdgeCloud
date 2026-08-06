@@ -12,15 +12,15 @@ from model import EarlyFusionMultiViewViT
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-from train_modelnet_drift_adapter import DRIFTS, PairedModelNetDrift
+from train_modelnet_drift_adapter import PairedModelNetDrift, severity_map
 
 def parse_args():
     p = argparse.ArgumentParser(description="ModelNet40 adapter impact evaluation")
     p.add_argument("--dataset-path", required=True); p.add_argument("--baseline-checkpoint", required=True)
     p.add_argument("--adapter-checkpoint", required=True); p.add_argument("--output-json", required=True)
-    p.add_argument("--severity", type=float, default=.8, help="fixed level for the full camera-corruption matrix")
-    p.add_argument("--sensor-noise-severities", type=float, nargs="+", default=(.8, 1.),
-                   help="additional sensor-noise levels; severity always remains in [0, 1]")
+    p.add_argument("--corruption-specs", type=severity_map,
+                   default={"illumination": 1.0, "defocus": .2, "sensor_noise": .4},
+                   help="only evaluate calibrated NAME=VALUE corruptions")
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--num-workers", type=int, default=4); p.add_argument("--r", type=int, default=32); return p.parse_args()
 
@@ -41,12 +41,8 @@ def main():
     model = EarlyFusionMultiViewViT("vit_small_patch16_224", 4, len(base.classes), pretrained=False)
     payload = torch.load(a.baseline_checkpoint, map_location="cpu"); model.load_state_dict(payload.get("model", payload.get("state_dict", payload)) if isinstance(payload, dict) else payload, strict=True)
     attach_adaptformer(model, a.r); model.cuda().eval()
-    levels = [a.severity, *a.sensor_noise_severities]
-    if any(not 0 <= value <= 1 for value in levels):
-        raise ValueError("all severities must be in [0, 1]")
-    cases = [("clean", "normal", 0.)] + [(kind, kind, a.severity) for kind in DRIFTS]
-    cases += [(f"sensor_noise_{value:g}", "sensor_noise", value) for value in a.sensor_noise_severities if value != a.severity]
-    result = {"dataset": "modelnet40", "split": "test", "matrix_severity": a.severity, "sensor_noise_severities": a.sensor_noise_severities, "baseline": {}, "adapter": {}}
+    cases = [("clean", "normal", 0.)] + [(f"{kind}_{severity:g}", kind, severity) for kind, severity in a.corruption_specs.items()]
+    result = {"dataset": "modelnet40", "split": "test", "calibrated_corruptions": a.corruption_specs, "baseline": {}, "adapter": {}}
     for name, drift, severity in cases:
         data = PairedModelNetDrift(base, (drift,), severity, severity, 0., 123,
                                    fixed_drift=drift, fixed_severity=severity)
