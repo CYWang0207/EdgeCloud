@@ -65,7 +65,8 @@ def parse_args():
         default=DEFAULT_ACC_FLOOR,
         help=f"业务可用 Critic quality proxy_acc 下限，默认 {DEFAULT_ACC_FLOOR}",
     )
-    parser.add_argument("--business-min-active-views", type=int, default=1, help="业务可用最小激活视角数")
+    parser.add_argument("--business-min-active-views", type=int, default=3,
+                        help="业务可用最小激活视角数（默认与 Actor 的 min_active_views=3 对齐）")
     parser.add_argument("--bw-min-mbps", type=float, default=20.0)
     parser.add_argument("--bw-max-mbps", type=float, default=120.0)
     parser.add_argument("--disconnect-prob", type=float, default=0.0, help="jitter_outage 随机断联概率")
@@ -108,7 +109,7 @@ def int_or_empty(row, key):
 
 def build_log_row(row, t, y_bw, w_t, struct_drift, v_opt, u_opt, k_opt,
                  c_comm, acc, cost, best_g, net_state, e2e_info,
-                 business_available, q_net):
+                 business_available, q_net, queue_result, candidate_scores):
     log_row = {
         "t": t,
         "sample_id": int_or_empty(row, "sample_id"),
@@ -139,6 +140,28 @@ def build_log_row(row, t, y_bw, w_t, struct_drift, v_opt, u_opt, k_opt,
         "transmission_success": int(bool(e2e_info.get("transmission_success", True))),
         "business_available": int(bool(business_available)),
     }
+
+    # 后台更新链路按时隙落盘；completed_events 的延迟在这里按任务类型汇总，
+    # 以便测试脚本无需重放模拟器状态即可统计完整的队列指标。
+    for key in (
+        "pending_comm", "served_comm", "background_comm", "realtime_comm",
+        "ttl_expired_mb", "cap_drop_mb", "drop_ratio", "adapter_drop_ratio",
+        "adapter_completion_rate", "u2_update_completion_rate",
+    ):
+        log_row[key] = float(queue_result.get(key, 0.0))
+    log_row["completed_event_count"] = int(queue_result.get("completed_event_count", 0))
+    for task_type, prefix in (("adapter", "adapter"), ("scl_weights", "scl")):
+        events = [event for event in queue_result.get("completed_events", [])
+                  if event.get("task_type") == task_type]
+        log_row[f"{prefix}_completed_event_count"] = len(events)
+        for metric in ("task_latency_ms", "queue_latency_ms"):
+            log_row[f"{prefix}_{metric}_sum"] = float(sum(event[metric] for event in events))
+
+    # 高结构漂移诊断：每种 u 记录该槽所有候选中的最高原始/网络惩罚后评分。
+    for u in (0, 1, 2):
+        score = candidate_scores.get(u)
+        log_row[f"G_raw_u{u}"] = "" if score is None else float(score["G_raw"])
+        log_row[f"G_effective_u{u}"] = "" if score is None else float(score["G_effective"])
 
     for i, value in enumerate(w_t, start=1):
         log_row[f"w_{i}"] = float(value)
@@ -184,6 +207,29 @@ def save_decision_log(path, rows, num_views):
         "deadline_met",
         "transmission_success",
         "business_available",
+        "pending_comm",
+        "served_comm",
+        "background_comm",
+        "realtime_comm",
+        "ttl_expired_mb",
+        "cap_drop_mb",
+        "drop_ratio",
+        "adapter_drop_ratio",
+        "adapter_completion_rate",
+        "u2_update_completion_rate",
+        "completed_event_count",
+        "adapter_completed_event_count",
+        "adapter_task_latency_ms_sum",
+        "adapter_queue_latency_ms_sum",
+        "scl_completed_event_count",
+        "scl_task_latency_ms_sum",
+        "scl_queue_latency_ms_sum",
+        "G_raw_u0",
+        "G_effective_u0",
+        "G_raw_u1",
+        "G_effective_u1",
+        "G_raw_u2",
+        "G_effective_u2",
     ]
 
     with path.open("w", newline="", encoding="utf-8") as f:
@@ -322,6 +368,7 @@ def main():
         best_g = -np.inf
         best_action = None
         best_details = None
+        candidate_scores = {}
         if not feasible:
             # 极端情况（断联且 Actor 未生成 u=0 候选）兜底：本地自治
             v_fallback = np.zeros(num_views, dtype=int)
@@ -336,6 +383,12 @@ def main():
             # realtime_comm 对 u=1/u=2-async 为 0（异步后台），仅 u=2 --sync-u2 时非 0
             realtime_comm = net.realtime_comm_mb(u_cand, c_comm)
             g_effective = net.apply_network_penalty(g_raw, realtime_comm)["G_effective"]
+
+            score = candidate_scores.get(int(u_cand))
+            if score is None or g_effective > score["G_effective"]:
+                candidate_scores[int(u_cand)] = {
+                    "G_raw": float(g_raw), "G_effective": float(g_effective)
+                }
 
             if g_effective > best_g:
                 best_g = g_effective
@@ -370,7 +423,7 @@ def main():
             build_log_row(
                 row, t, y_bw[t], w_t, struct_drift, v_opt, u_opt, k_opt,
                 c_comm_opt, acc_opt, cost_opt, best_g, net_state, e2e_info,
-                business_available, q_net,
+                business_available, q_net, queue_result, candidate_scores,
             )
         )
 

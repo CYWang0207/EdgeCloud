@@ -102,3 +102,4 @@ Desktop.ini
 logs/
 .env
 .env.local
+local/

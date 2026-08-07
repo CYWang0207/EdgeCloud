@@ -512,6 +512,7 @@ class NetworkSimulator:
             "dropped_comm": float(self.dropped_comm),
             "drop_ratio": self.drop_ratio(),
             "adapter_drop_ratio": self.drop_ratio("adapter"),
+            "adapter_completion_rate": self.completion_rate("adapter"),
             "u2_update_completion_rate": self.completion_rate("scl_weights"),
             "scl_weights_completion_rate": self.completion_rate("scl_weights"),
             "ttl_expired_count": int(ttl_drop_count),
