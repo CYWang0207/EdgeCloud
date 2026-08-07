@@ -23,36 +23,19 @@ class AdaptFormerMLP(nn.Module):
     串联进 FFN 旁路后不改变预训练主干输出（验收①的来源）。
     """
 
-    def __init__(self, dim: int, r: int = 32, condition_dim: int = 0):
+    def __init__(self, dim: int, r: int = 32):
         super().__init__()
         self.dim = dim
         self.r = r
-        self.condition_dim = int(condition_dim)
         self.down = nn.Linear(dim, r)
         self.act = nn.GELU()
         self.up = nn.Linear(r, dim)
-        self.film = (
-            nn.Linear(self.condition_dim, 2 * r)
-            if self.condition_dim > 0 else None
-        )
-        if self.film is not None:
-            nn.init.zeros_(self.film.weight)
-            nn.init.zeros_(self.film.bias)
         # 零初始化 W_up，保证启动时 adapter 输出为 0
         nn.init.zeros_(self.up.weight)
         nn.init.zeros_(self.up.bias)
 
-    def forward(self, x, condition=None):
-        h = self.act(self.down(x))
-        if self.film is not None and condition is not None:
-            if condition.ndim != 2 or condition.shape[-1] != self.condition_dim:
-                raise ValueError(
-                    f"condition must be [B, {self.condition_dim}], got "
-                    f"{tuple(condition.shape)}"
-                )
-            gamma, beta = self.film(condition).chunk(2, dim=-1)
-            h = h * (1.0 + gamma.unsqueeze(1)) + beta.unsqueeze(1)
-        return self.up(h)
+    def forward(self, x):
+        return self.up(self.act(self.down(x)))
 
 
 class AdaptFormerMLPWrapper(nn.Module):
@@ -63,13 +46,11 @@ class AdaptFormerMLPWrapper(nn.Module):
     scale 任意初值乘 0 仍为 0，挂载即不改输出。训练阶段 scale 学到合适增益。
     """
 
-    def __init__(self, mlp: nn.Module, dim: int, r: int = 32, scale: float = 1.0,
-                 condition_dim: int = 0):
+    def __init__(self, mlp: nn.Module, dim: int, r: int = 32, scale: float = 1.0):
         super().__init__()
         self.mlp = mlp  # 保留原 FFN（预训练权重随 mlp 一并保留）
-        self.adapter = AdaptFormerMLP(dim, r, condition_dim=condition_dim)
+        self.adapter = AdaptFormerMLP(dim, r)
         self.scale = nn.Parameter(torch.tensor(float(scale)))
-        self.condition = None
         # 运行时开关（默认 True，向后兼容）：False 时旁路完全关闭，输出 = 原 FFN。
         # 供 B 的 benchmark 做"带/不带 adapter"干净对比。
         self.enabled = True
@@ -77,7 +58,7 @@ class AdaptFormerMLPWrapper(nn.Module):
     def forward(self, x):
         if not self.enabled:
             return self.mlp(x)
-        return self.mlp(x) + self.scale * self.adapter(x, self.condition)
+        return self.mlp(x) + self.scale * self.adapter(x)
 
 
 def _block_embed_dim(block) -> int:
@@ -90,8 +71,7 @@ def _block_embed_dim(block) -> int:
     raise ValueError("无法从 block 推断 embed_dim，请检查 timm 版本")
 
 
-def attach_adaptformer(model, r: int = 32, scale: float = 1.0,
-                       condition_dim: int = 0):
+def attach_adaptformer(model, r: int = 32, scale: float = 1.0):
     """遍历 model.blocks，把每个 block.mlp 替换为 AdaptFormerMLPWrapper（就地替换）。
 
     返回 model 本身（已在原对象上完成替换，无需重新赋值）。
@@ -101,9 +81,7 @@ def attach_adaptformer(model, r: int = 32, scale: float = 1.0,
         raise ValueError("model 缺少 blocks 属性或为空，无法挂载 AdaptFormer")
     dim = _block_embed_dim(model.blocks[0])
     for block in model.blocks:
-        block.mlp = AdaptFormerMLPWrapper(
-            block.mlp, dim, r=r, scale=scale, condition_dim=condition_dim
-        )
+        block.mlp = AdaptFormerMLPWrapper(block.mlp, dim, r=r, scale=scale)
     return model
 
 
@@ -126,25 +104,6 @@ def freeze_backbone(model):
         p.requires_grad = True
     for p in model.head.parameters():
         p.requires_grad = True
-    if hasattr(model, "drift_conditioner") and model.drift_conditioner is not None:
-        for p in model.drift_conditioner.parameters():
-            p.requires_grad = True
-    if hasattr(model, "bad_view_token") and model.bad_view_token is not None:
-        model.bad_view_token.requires_grad = True
-    return model
-
-
-def set_adapter_condition(model, condition):
-    """Set one batch condition on every AdaptFormer wrapper.
-
-    The condition is runtime state rather than a parameter and is cleared by
-    passing ``None``.  Keeping this outside the timm block signature preserves
-    all existing forward paths.
-    """
-    for block in model.blocks:
-        mlp = block.mlp
-        if isinstance(mlp, AdaptFormerMLPWrapper):
-            mlp.condition = condition
     return model
 
 
@@ -198,8 +157,6 @@ def collect_adapter_state(model) -> dict:
             "mlp.adapter." in name
             or name.endswith("mlp.scale")
             or name.startswith(("norm.", "head."))
-            or name.startswith("drift_conditioner.")
-            or name == "bad_view_token"
         ):
             state[name] = p.detach().cpu()
     return state
@@ -220,7 +177,7 @@ def load_adapter_checkpoint(model, path, device="cpu"):
     """把 adapter 权重加载进已 attach 的 model（不覆盖冻结主干）。
 
     兼容两种格式：
-    - {"adapter": {...}, "norm": {...}, "head": {...}}（train_adapter 产出）
+    - {"adapter": {...}, "norm": {...}, "head": {...}}（adapter-only 训练产出）
     - 整模型 state_dict（含 blocks.*.mlp.adapter.*，如 baseline 风格 checkpoint）
     返回 (missing, unexpected)。
     """

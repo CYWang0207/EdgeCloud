@@ -5,43 +5,6 @@ import torch.nn as nn
 import timm
 
 
-class MultiViewDriftConditioner(nn.Module):
-    """Predict a continuous environment vector and per-view reliability.
-
-    It consumes frozen MV-ViT patch features, so the trainable part stays small.
-    Reliability is explicit and can be weakly supervised by synthetic drift.
-    """
-
-    def __init__(self, embed_dim, condition_dim=128):
-        super().__init__()
-        hidden_dim = max(condition_dim, 128)
-        self.view_projector = nn.Sequential(
-            nn.LayerNorm(embed_dim),
-            nn.Linear(embed_dim, hidden_dim),
-            nn.GELU(),
-        )
-        self.condition_head = nn.Linear(hidden_dim, condition_dim)
-        self.quality_head = nn.Linear(hidden_dim, 1)
-        nn.init.zeros_(self.quality_head.weight)
-        nn.init.constant_(self.quality_head.bias, 4.0)
-
-    def forward(self, tokens, view_mask=None):
-        view_features = tokens.mean(dim=2)
-        hidden = self.view_projector(view_features)
-        if view_mask is None:
-            weights = torch.ones(
-                hidden.shape[:2], device=hidden.device, dtype=hidden.dtype
-            )
-        else:
-            weights = view_mask.to(device=hidden.device, dtype=hidden.dtype)
-        pooled = (hidden * weights.unsqueeze(-1)).sum(dim=1)
-        pooled = pooled / weights.sum(dim=1, keepdim=True).clamp_min(1.0)
-        condition = self.condition_head(pooled)
-        condition = torch.nn.functional.normalize(condition.float(), dim=-1).to(hidden.dtype)
-        quality = torch.sigmoid(self.quality_head(hidden).squeeze(-1)) * weights
-        return condition, quality
-
-
 class EarlyFusionMultiViewViT(nn.Module):
     def __init__(self, model_name='vit_base_patch16_224', num_views=4, num_classes=40, pretrained=True):
         """
@@ -88,18 +51,6 @@ class EarlyFusionMultiViewViT(nn.Module):
 
         # 最终的分类头
         self.head = nn.Linear(embed_dim, num_classes)
-        self.drift_conditioner = None
-        self.bad_view_token = None
-
-    def attach_drift_conditioner(self, condition_dim=128):
-        """Attach the edge-side condition encoder without changing old models."""
-        embed_dim = self.head.in_features
-        self.drift_conditioner = MultiViewDriftConditioner(
-            embed_dim, condition_dim=condition_dim
-        )
-        self.bad_view_token = nn.Parameter(torch.zeros(1, 1, 1, embed_dim))
-        nn.init.normal_(self.bad_view_token, std=0.02)
-        return self
 
     def _build_token_keep_mask(self, tokens, keep_ratios, token_score_mode):
         """
@@ -138,8 +89,7 @@ class EarlyFusionMultiViewViT(nn.Module):
         return torch.where(active, tokens, missing)
 
     def forward(self, x, view_mask=None, keep_ratios=None, token_score_mode=None,
-                prompt_tokens=None, return_features=False, condition_vector=None,
-                return_aux=False, apply_quality_gate=True):
+                prompt_tokens=None, return_features=False):
         """
         x: [Batch_size, Views, Channels, Height, Width]
         view_mask: optional [Batch_size, Views], 1 means available, 0 means missing.
@@ -160,25 +110,6 @@ class EarlyFusionMultiViewViT(nn.Module):
         # --- 2. 双重位置编码注入 ---
         # 恢复出 B 和 V 维度 -> [B, V, num_patches, embed_dim]
         x = x.view(B, V, N, D)
-
-        edge_condition = quality = None
-        if self.drift_conditioner is not None:
-            edge_condition, quality = self.drift_conditioner(x, view_mask)
-            if apply_quality_gate:
-                bad = self.bad_view_token.expand_as(x)
-                gate = quality.to(dtype=x.dtype).view(B, V, 1, 1)
-                x = gate * x + (1.0 - gate) * bad
-
-        active_condition = condition_vector
-        if active_condition is None:
-            active_condition = edge_condition
-        # Runtime conditioning keeps timm block signatures and pruning paths
-        # backward compatible. Import locally to avoid a model/adaptformer cycle.
-        try:
-            from adaptformer import set_adapter_condition
-        except ImportError:
-            from .adaptformer import set_adapter_condition
-        set_adapter_condition(self, active_condition)
 
         if keep_ratios is not None:
             if token_score_mode is None:
@@ -214,13 +145,6 @@ class EarlyFusionMultiViewViT(nn.Module):
         cls_out = x[:, 0]
         out = self.head(cls_out)
 
-        if return_aux:
-            return out, {
-                "features": cls_out,
-                "edge_condition": edge_condition,
-                "view_quality": quality,
-                "active_condition": active_condition,
-            }
         if return_features:
             return out, cls_out
         return out
