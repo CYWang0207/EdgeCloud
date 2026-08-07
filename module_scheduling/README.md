@@ -4,7 +4,7 @@
 
 - Actor-Critic RL：Actor（DNN）生成候选动作，Critic（注水算法）精确评估
 - Lyapunov 带宽队列：长期平均带宽约束优化
-- VLM Oracle：模拟 DeepSeek 场景分析行为
+- 场景专用 Adapter：将已校准的 adapter-only 权重作为 u=1 小更新进行传输模拟
 - 多节点协同：冲突检测 + 云端一致性仲裁
 - 网络韧性：带宽波动 + 断连 fallback
 

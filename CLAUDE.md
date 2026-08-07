@@ -42,7 +42,7 @@
 |---|---|---|
 | 王成洋（队长） | 系统集成 + 多节点协同 | 总体架构、接口统筹、AdaptFormer 模块、主循环集成、多节点冲突检测与仲裁 |
 | 钟捷杭（B） | 模型评测 | TTFT / 内存 / 延迟测量、集中式基准对比、端到端时延、80-90% 能力保持曲线、硬指标汇总 |
-| 张晨（C） | 第二场景 | SEVD 数据集适配、全流程训练、train_adapter 训练管线（云端 VLM 蒸馏→adapter） |
+| 张晨（C） | 第二场景 | BoxCars116k 数据适配、相机退化校准与场景专用 Adapter 训练 |
 | 唐凤玲 (D) | 网络韧性 + 评测 | 网络波动模拟器 network_sim.py、业务连续性指标、网络韧性实验 |
 | 苏程鑫 （E）| 文档 / 实验统筹 | 技术报告、对比图表、Demo 视频、进度追踪、方案文档维护 |
 
@@ -55,13 +55,15 @@
 
 ## 三、技术架构与核心决策
 
+> **当前实现状态（2026-08-07）**：正式结果采用“场景专用相机退化校正 Adapter”：先校准有效退化，再以 clean/corrupt 成对监督训练 Adapter。本分支不包含其他条件化实验路线。
+
 ### 总体方案（2026-08-03 团队拍板：采用 Adapter 方案）
 
 ```
          +---------- 云端 Cloud ----------+
-         | DeepSeek / VLM "知识预言机"     |   ← 冻结，不训练
-         | · 分析关键帧 → 判断环境状态     |
-         | · 蒸馏监督 AdaptFormer adapter  |   ← 云端大模型知识压缩进 adapter
+         | 场景校准与 Adapter 训练          |
+         | · 扫描有效相机退化及强度         |
+         | · clean/corrupt 成对训练 Adapter |
          | · 多节点冲突仲裁                |
          +---+--------------------+------+
    上行关键帧 |                    | 下行 adapter 参数（几百KB~MB）/ 重训权重
@@ -78,13 +80,13 @@
          +--------------------------------+
 ```
 
-### 压缩叙事（答辩核心）
-**云端 VLM 的场景知识，经蒸馏压缩进 AdaptFormer 适配器；adapter 即压缩产物，下发的是压缩后的场景知识，非整个模型。** 压缩的不是参数，是云端大模型蒸馏出来的场景知识；传输的不是模型，是这个压缩后的小适配器。比"把 DeepSeek 量化蒸馏成迷你模型部署边缘"更可行（大模型再压缩也跑不动毫秒级多视角融合），比"纯 Prompt 注入"更贴赛题"基于全量大模型压缩"字面、且能力保持率可测。
+### 当前 Adapter 叙事（答辩核心）
+**Adapter 是针对特定数据域、经相机退化校准后训练出的恢复模块。** 下发的是约 1.2–1.3MB 的 adapter-only 参数包，而非整个冻结的 MV-ViT 主干。BoxCars116k 与 ModelNet40 分别维护权重和退化配置，不能跨场景混用。
 
 ### 协同动作语义（u_t）
 - **u=0 本地自治**：边缘冻结主干+adapter 直接推理，c_comm=0，离线/弱网可用
 - **u=1 adapter 同步**：云端下发 adapter 参数（几百KB~MB），治环境漂移；接现有 EdgeCloud_RL 的 u=1 动作
-- **u=2 重训权重同步**：云端下发重训权重（~50MB），治结构性漂移；Dora 调度的"重训练"对象=只重训 adapter（尺度匹配时间槽）
+- **u=2 结构性大更新同步**：网络模拟中的 50MB 后台大包，用于检验队列与弱网行为；不等同于已验证 adapter-only checkpoint 的实际文件体积
 
 ### 调度与理论
 - **Actor-Critic + Lyapunov + 注水算法**：Actor(DNN) 生成候选 (v,u)，Critic(注水闭式解) 算最优 k_t，Lyapunov 虚拟队列 Y_bw 保证长期平均带宽约束
@@ -110,7 +112,8 @@ EdgeCloud/
 │   ├── dataset.py / drift_dataset.py
 │   ├── prompt_tuning/               # PromptGenerator（PEFT，现作为可选辅助；存在两套实现待清理）
 │   ├── train.py / train_retrain_drift.py / train_token_prompt.py  # 场景一 ModelNet40 训练管线
-│   ├── train_adapter.py             # C 8/4 起，云端 VLM 软标签蒸馏→只训 adapter（8/3 晚骨架已写，待服务器跑）
+│   ├── train_boxcars_camera_adapter.py # BoxCars 相机退化成对训练
+│   ├── train_modelnet_drift_adapter.py # ModelNet40 相机退化成对训练
 │   └── benchmarks/                  # B 的评测脚本
 │       ├── benchmark_latency.py     # TTFT/延迟（已达标）
 │       ├── benchmark_memory.py      # 内存（已达标）
@@ -172,7 +175,7 @@ EdgeCloud/
 - **断联 → 强制 u=0**（只保留本地自治候选）
 - **超带宽 → 软罚或硬过滤**：`G_effective = G_raw - overflow_penalty × (comm_overflow / B_t)`；`--strict-bandwidth` 直接过滤
 - **u=2 默认异步后台**：本时隙先用本地旧模型出决策，权重包进 Q_net 积压队列，后续容量充足再消化；`--sync-u2` 才实时
-- **端到端时延**：`T_e2e = T_edge + T_comm + T_cloud`；`T_comm = 8 × realtime_comm / R_t × 1000 + RTT`；u=0 时 T_comm=0（特判，不加 RTT）；T_cloud 按动作分（u=0→0、u=1→VLM推理时延、u=2异步→0）
+- **端到端时延**：`T_e2e = T_edge + T_comm + T_cloud`；`T_comm = 8 × realtime_comm / R_t × 1000 + RTT`；u=0 时 T_comm=0（特判，不加 RTT）；默认 u=1/u=2 后台更新不阻塞前台链路，强制同步实验另行计入通信与云端时延。
 - **业务可用四条件（防"断联切本地=100%可用"虚高）**：`business_available = decision_success AND e2e≤deadline AND active_views≥min AND proxy_acc≥acc_floor`
 
 ### NetworkSimulator 接口（王成洋 8/4 接主循环对齐）
@@ -192,14 +195,14 @@ class NetworkSimulator:
 
 ### 主关键路径（最长，决定 8/10 能否出数）
 ```
-王成洋 adaptformer.py(8/4) → C train_adapter 训练(8/5) → C adapter 权重(8/5-8/8)
+王成洋 adaptformer.py(8/4) → C 两场景相机退化校准与训练(8/5-8/8) → C adapter 权重
   → B 全指标评测(8/6-8/7) → B 80-90% 能力曲线(8/7) → 苏程鑫 报告填数(8/8) → 8/10 指标定稿
 ```
 **原最大瓶颈 adaptformer.py 已于 8/3 晚 verify 跑通（卡点解除）；当前瓶颈转为 C 的 adapter 训练权重产出（8/5-8/8）。**
 
 ### 每人本周主线
 - **王成洋**：adaptformer.py(8/3-8/4) → u=1 adapter sync 接入(8/5) → Dora 重训→adapter 重构(8/6) → 多节点 arbiter(8/7-8/8) → 系统联调(8/9)
-- **张晨 C**：~~SEVD 任务定义~~ → 已改用 BoxCars116k（baseline 已 88% 跑通）→ train_adapter.py(8/4-8/5，待 adaptformer.py 落地) → 两场景 adapter 权重(8/5-8/8) → 漂移重训(8/7)
+- **张晨 C**：~~SEVD 任务定义~~ → 已改用 BoxCars116k（baseline 已 88% 跑通）→ 相机退化校准与场景专用 adapter 训练 → 两场景 adapter 权重 → 漂移重训
 - **钟捷杭 B**：benchmark_full 扩 adapter 口径 + benchmark_e2e 骨架(8/3) → 集中式基准+e2e(8/4-8/5) → 真权重全指标(8/6) → 80-90% 能力保持曲线(8/7) → 冲突率统计(8/8) → 指标对照表(8/9)
 - **唐凤玲**：network_sim 6 点决策+开写(8/3) → network_sim.py 完成(8/4) → 弱网实验(8/5-8/6) → 接入 e2e(8/7) → 仲裁下发韧性(8/8) → 数据定稿(8/9)
 - **苏程鑫**：方案文档改 Adapter 叙事(8/3) → 接口契约 v2(8/4) → 答辩叙事(8/5) → 报告框架(8/7) → 填数据出图(8/8) → 汇报材料(8/9)
@@ -208,7 +211,7 @@ class NetworkSimulator:
 | 指标 | 负责人 |
 |---|---|
 | 参数量 / TTFT / 内存 / 单帧延迟 | B |
-| 80-90% 能力保持曲线（adapter vs 云端 VLM） | B + C |
+| 退化恢复与 clean 域保持曲线（adapter vs baseline） | B + C |
 | 端到端时延 ≤0.2s（含网络） | B + 唐凤玲 |
 | 业务保持率 ≥90% | 唐凤玲 |
 | 冲突 ≤5% / 解决 ≥90% | 王成洋 + B |
@@ -218,12 +221,10 @@ class NetworkSimulator:
 
 ## 七、关键风险与待确认
 
-1. **VLM Oracle 现在是模拟的**——adapter 蒸馏需要真"老师"，本周内至少接一个真 VLM（InternVL/Qwen-VL）产软标签，否则"云端大模型压缩→adapter"叙事不实。需和老师确认 VLM 推理资源。
-2. **~~SEVD 任务语义错配~~ → 已解决**：张晨已放弃 SEVD，改选 **BoxCars116k 交通车辆品牌识别（16 类 make 分类任务）**。BoxCars 是分类任务，与 MV-ViT 分类模型语义匹配，错配问题消除。baseline 已 30 轮训练，官方 test Top-1=88.04%、Top-5=97.13%（详见 `docs/第二场景_BoxCars116k.md`）。注意 BoxCars 不提供跨摄像头身份，4 张图是同一摄像头下同车轨迹的 4 个时间观测 + `view_mask`，叙事上不得表述为"四台摄像头同拍一辆车"。
-3. **"80-90% 能力保持"指标口径**——赛题写"数学/代码/NLP"，本项目是视觉任务。需让老师/队长问发榜单位：adapter 方案算不算"基于全量大模型压缩"？80-90% 指标在视觉任务上能否按"边缘 adapter 保持云端 VLM 能力百分比"理解？问清就踏实。
-4. **基线公平性**——comparison_baselines 的 LSCI/VBRD/Hyperion 被有意弱化，README 已明文承认"简化版突出缺点"；答辩若被追问公平性有风险，至少一个基线用未弱化实现。
-5. **prompt/adapter 50/50 已于 8/3 定 adapter**——prompt 代码不删，作"环境漂移快响应"可选辅助，但本周不铺开做，先把 adapter 主线打透。当前 prompt 存在两套互不兼容实现（顶层 `train_token_prompt.py` 用 `EarlyFusionMultiViewViT`+5类漂移；`prompt_tuning/` 子目录用独立 `PromptMultiViewViT`+仅亮度3类），属待清理技术债。
-6. **代码与文档同步进度**——8/3 拍板的 adapter 方案：`adaptformer.py` 王成洋 8/3 已实现，**8/3 晚本机 py3.11 verify_adaptformer.py 三点验收全通过**（①零初始化 Δ=0 ②adapter 0.300M<1M ③三条前向路径+wrapper hook 全触发）；`train_adapter.py` 骨架 8/3 晚已写（预计算软标签蒸馏，待服务器跑通）；u=1 已在 critic_water_filling / baseline_common / main_edge_cloud_new / evaluate_rl_policy 四处由 S_prompt/prompt 注入改为 S_adapter/adapter 加载（8/3 晚代码层完成，待真轨迹/权重验证）；方案总览.md、README.md、接口契约.md 叙事已对齐 Adapter。
+1. **~~SEVD 任务语义错配~~ → 已解决**：张晨已放弃 SEVD，改选 **BoxCars116k 交通车辆品牌识别（16 类 make 分类任务）**。BoxCars 是分类任务，与 MV-ViT 分类模型语义匹配，错配问题消除。baseline 已 30 轮训练，官方 test Top-1=88.04%、Top-5=97.13%（详见 `docs/第二场景_BoxCars116k.md`）。注意 BoxCars 不提供跨摄像头身份，4 张图是同一摄像头下同车轨迹的 4 个时间观测 + `view_mask`，叙事上不得表述为"四台摄像头同拍一辆车"。
+2. **场景权重路由**：两套场景专用 checkpoint 已分别验证，但在线调度器尚未依据场景元数据自动选择对应权重。
+3. **基线公平性**——comparison_baselines 的 LSCI/VBRD/Hyperion 被有意弱化，README 已明文承认"简化版突出缺点"；答辩若被追问公平性有风险，至少一个基线用未弱化实现。
+4. **代码与文档同步进度**——`adaptformer.py` 已通过零初始化、参数量和三条前向路径验收；BoxCars 与 ModelNet40 的相机退化校准、训练和逐类评测结果已落在 `results/*_camera_adapter_20260806/`。u=1 已在调度口径中使用 S_adapter/adapter 加载。
 
 ---
 
