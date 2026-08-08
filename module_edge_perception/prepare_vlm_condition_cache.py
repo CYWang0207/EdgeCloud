@@ -67,6 +67,10 @@ def main():
     conditions["projection_mean"] = mean
     conditions["projection_basis"] = basis
     conditions["condition_dim"] = args.condition_dim
+    # Preserve the raw-export provenance.  Training uses this to reject an
+    # accidentally clean-image or old synthetic-drift cache.
+    if isinstance(payload.get("metadata"), dict):
+        conditions["source_metadata"] = payload["metadata"]
     output_dir = os.path.dirname(os.path.abspath(args.output))
     os.makedirs(output_dir, exist_ok=True)
     torch.save(conditions, args.output)

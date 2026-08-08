@@ -12,6 +12,7 @@ import json
 import os
 import random
 import sys
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -19,17 +20,25 @@ import torchvision.transforms as transforms
 from torchvision.transforms.functional import to_pil_image
 
 from boxcars_dataset import BoxCarsMultiView, VALID_SPLITS
-from boxcars_drift_dataset import PairedBoxCarsDriftDataset, SUPPORTED_TRAIN_DRIFTS
+from boxcars_camera_drift_dataset import DRIFTS, PairedBoxCarsCameraDrift
 
 
 def parse_drift_types(value):
     values = tuple(item.strip() for item in value.split(",") if item.strip())
-    unknown = sorted(set(values) - set(SUPPORTED_TRAIN_DRIFTS))
+    unknown = sorted(set(values) - set(DRIFTS))
     if not values or unknown:
-        raise argparse.ArgumentTypeError(
-            f"drift types must come from {SUPPORTED_TRAIN_DRIFTS}; unknown={unknown}"
-        )
+        raise argparse.ArgumentTypeError(f"drift types must come from {DRIFTS}; unknown={unknown}")
     return values
+
+
+def parse_fixed_severities(value):
+    result = {}
+    for item in value.split(","):
+        name, separator, raw = item.strip().partition("=")
+        if not separator or name not in DRIFTS or not 0.0 <= float(raw) <= 1.0:
+            raise argparse.ArgumentTypeError("use TYPE=0..1 entries from camera drift types")
+        result[name] = float(raw)
+    return result
 
 
 def parse_args():
@@ -40,11 +49,11 @@ def parse_args():
     parser.add_argument("--split", choices=VALID_SPLITS, default="train")
     parser.add_argument("--num-views", type=int, default=4)
     parser.add_argument("--drift-types", type=parse_drift_types,
-                        default=SUPPORTED_TRAIN_DRIFTS)
-    parser.add_argument("--severity-min", type=float, default=0.35)
-    parser.add_argument("--severity-max", type=float, default=1.0)
+                        default=("illumination", "motion_blur", "sensor_noise"))
+    parser.add_argument("--drift-weights", type=float, nargs="+", default=(.30, .30, .40))
+    parser.add_argument("--fixed-severities", type=parse_fixed_severities,
+                        default={"illumination": 1.0, "motion_blur": .8, "sensor_noise": .6})
     parser.add_argument("--clean-probability", type=float, default=0.15)
-    parser.add_argument("--independent-view-drifts", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-samples", type=int, default=0)
     parser.add_argument("--log-every", type=int, default=10)
@@ -87,8 +96,11 @@ def extract_sample(model, processor, images, view_mask):
     inputs = processor(images=pil_images, return_tensors="pt")
     pixel_values = inputs["pixel_values"].to(model.device)
     grid_thw = inputs["image_grid_thw"].to(model.device)
-    visual = model.get_image_features(pixel_values, grid_thw)
-    merge = int(model.config.vision_config.spatial_merge_size)
+    # The condition cache is deliberately visual-only.  Calling the complete
+    # quantized VLM pulls in the language-model Marlin kernels even though no
+    # text token is used; on edge GPUs that is both unnecessary and brittle.
+    visual = model(pixel_values, grid_thw)
+    merge = int(model.config.spatial_merge_size)
     counts = image_token_counts(grid_thw, merge)
     layers = [
         pool_per_image(features, counts)
@@ -106,6 +118,35 @@ def extract_sample(model, processor, images, view_mask):
     output[:len(available_features)] = available_features
     output[len(available_features):] = available_features[-1]
     return output
+
+
+def load_visual_encoder(model_path):
+    """Load only Qwen3-VL's vision tower from a sharded full-model checkpoint."""
+    try:
+        from safetensors import safe_open
+        from transformers import AutoConfig, Qwen3VLVisionModel
+    except ImportError as exc:
+        raise RuntimeError("transformers Qwen3-VL support and safetensors are required") from exc
+    root = Path(model_path)
+    config = AutoConfig.from_pretrained(root).vision_config
+    model = Qwen3VLVisionModel(config)
+    index_path = root / "model.safetensors.index.json"
+    if not index_path.is_file():
+        raise FileNotFoundError(f"Qwen3-VL safetensors index is missing: {index_path}")
+    with open(index_path, encoding="utf-8") as handle:
+        weight_map = json.load(handle)["weight_map"]
+    shards = sorted({name for name in weight_map.values() if name and any(
+        key.startswith("model.visual.") and value == name
+        for key, value in weight_map.items()
+    )})
+    state = {}
+    for shard in shards:
+        with safe_open(str(root / shard), framework="pt", device="cpu") as handle:
+            for key in handle.keys():
+                if key.startswith("model.visual."):
+                    state[key.removeprefix("model.visual.")] = handle.get_tensor(key)
+    model.load_state_dict(state, strict=True)
+    return model.cuda().eval()
 
 
 def save_cache(path, split, features, masks, metadata):
@@ -169,7 +210,7 @@ def main():
     os.environ["PATH"] = python_bin + os.pathsep + os.environ.get("PATH", "")
 
     try:
-        from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+        from transformers import AutoProcessor
     except ImportError as exc:
         raise RuntimeError("transformers with Qwen3-VL support is required") from exc
 
@@ -180,29 +221,25 @@ def main():
     base = BoxCarsMultiView(
         args.dataset_path, args.split, "make", args.num_views, transform
     )
-    dataset = PairedBoxCarsDriftDataset(
+    if len(args.drift_weights) != len(args.drift_types):
+        raise ValueError("drift-weights length must match drift-types")
+    dataset = PairedBoxCarsCameraDrift(
         base,
         drift_types=args.drift_types,
-        severity_min=args.severity_min,
-        severity_max=args.severity_max,
         clean_probability=args.clean_probability,
-        independent_view_drifts=args.independent_view_drifts,
         seed=args.seed + (0 if args.split == "train" else 1_000_003),
+        drift_weights=args.drift_weights,
+        fixed_severities=args.fixed_severities,
         normalize=False,
     )
     processor = AutoProcessor.from_pretrained(
         args.model_path, trust_remote_code=args.trust_remote_code
     )
-    model = Qwen3VLForConditionalGeneration.from_pretrained(
-        args.model_path,
-        device_map="auto",
-        dtype="auto",
-        trust_remote_code=args.trust_remote_code,
-    ).eval()
+    model = load_visual_encoder(args.model_path)
 
     limit = min(len(dataset), args.max_samples or len(dataset))
     features, masks = [], []
-    layer_indexes = list(model.config.vision_config.deepstack_visual_indexes) + [
+    layer_indexes = list(model.config.deepstack_visual_indexes) + [
         "final"
     ]
     metadata = {
@@ -212,9 +249,10 @@ def main():
         "num_views": args.num_views,
         "layers": layer_indexes,
         "drift_types": list(args.drift_types),
-        "severity_range": [args.severity_min, args.severity_max],
+        "drift_weights": list(args.drift_weights),
+        "fixed_severities": args.fixed_severities,
+        "drift_generator": "boxcars_camera_drift_dataset",
         "clean_probability": args.clean_probability,
-        "independent_view_drifts": args.independent_view_drifts,
         "seed": args.seed,
     }
     if args.resume:

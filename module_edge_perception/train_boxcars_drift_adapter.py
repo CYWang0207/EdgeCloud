@@ -29,19 +29,32 @@ from adaptformer import (
     set_adapter_enabled,
 )
 from boxcars_dataset import BoxCarsMultiView, VALID_TASKS
-from boxcars_drift_dataset import PairedBoxCarsDriftDataset, SUPPORTED_TRAIN_DRIFTS
+from boxcars_camera_drift_dataset import DRIFTS, PairedBoxCarsCameraDrift
 from model import EarlyFusionMultiViewViT
 
 
 def parse_drift_types(value):
     values = tuple(item.strip() for item in value.split(",") if item.strip())
-    unknown = sorted(set(values) - set(SUPPORTED_TRAIN_DRIFTS))
+    unknown = sorted(set(values) - set(DRIFTS))
     if not values or unknown:
         raise argparse.ArgumentTypeError(
             f"drift types must be comma-separated values from "
-            f"{SUPPORTED_TRAIN_DRIFTS}; unknown={unknown}"
+            f"{DRIFTS}; unknown={unknown}"
         )
     return values
+
+
+def parse_fixed_severities(value):
+    result = {}
+    for item in value.split(","):
+        name, separator, raw = item.strip().partition("=")
+        if not separator or name not in DRIFTS:
+            raise argparse.ArgumentTypeError("use TYPE=0..1 entries from camera drift types")
+        severity = float(raw)
+        if not 0.0 <= severity <= 1.0:
+            raise argparse.ArgumentTypeError("fixed severities must be in [0, 1]")
+        result[name] = severity
+    return result
 
 
 def parse_args():
@@ -50,15 +63,13 @@ def parse_args():
     parser.add_argument("--baseline-checkpoint", required=True)
     parser.add_argument("--task", choices=VALID_TASKS, default="make")
     parser.add_argument("--expert-name", default="general")
-    parser.add_argument(
-        "--drift-types", type=parse_drift_types,
-        default=SUPPORTED_TRAIN_DRIFTS,
-        help="comma-separated expert domain; one type for a specialist",
-    )
-    parser.add_argument("--severity-min", type=float, default=0.35)
-    parser.add_argument("--severity-max", type=float, default=1.0)
+    parser.add_argument("--drift-types", type=parse_drift_types,
+                        default=("illumination", "motion_blur", "sensor_noise"))
+    parser.add_argument("--drift-weights", type=float, nargs="+", default=(.30, .30, .40))
+    parser.add_argument("--fixed-severities", type=parse_fixed_severities,
+                        default={"illumination": 1.0, "motion_blur": .8, "sensor_noise": .6},
+                        help="reused calibrated camera severities; TYPE=0..1 pairs")
     parser.add_argument("--clean-probability", type=float, default=0.15)
-    parser.add_argument("--independent-view-drifts", action="store_true")
     parser.add_argument("--feature-weight", type=float, default=0.25)
     parser.add_argument("--consistency-weight", type=float, default=0.20)
     parser.add_argument("--condition-dim", type=int, default=128)
@@ -123,14 +134,14 @@ def make_dataset(args, split, clean_probability):
         args.dataset_path, split, args.task, args.num_views,
         transforms.Compose(transform_items),
     )
-    return PairedBoxCarsDriftDataset(
+    return PairedBoxCarsCameraDrift(
         base,
         drift_types=args.drift_types,
-        severity_min=args.severity_min,
-        severity_max=args.severity_max,
         clean_probability=clean_probability,
-        independent_view_drifts=args.independent_view_drifts,
         seed=args.seed + (0 if split == "train" else 1_000_003),
+        drift_weights=args.drift_weights,
+        fixed_severities=args.fixed_severities,
+        return_metadata=True,
     )
 
 
@@ -210,20 +221,34 @@ def paired_loss(
     )
 
 
-def load_condition_cache(path, split, expected_length, condition_dim):
+def load_condition_cache(path, split, expected_length, condition_dim, args):
     if not path:
         return None
     payload = torch.load(path, map_location="cpu")
-    if isinstance(payload, dict):
-        payload = payload.get(split, payload.get("conditions"))
-    if not isinstance(payload, torch.Tensor) or payload.ndim != 2:
+    source_metadata = payload.get("source_metadata") if isinstance(payload, dict) else None
+    conditions = payload.get(split, payload.get("conditions")) if isinstance(payload, dict) else payload
+    if not isinstance(conditions, torch.Tensor) or conditions.ndim != 2:
         raise ValueError("VLM cache must contain a [samples, condition_dim] tensor")
-    if payload.shape != (expected_length, condition_dim):
+    if conditions.shape != (expected_length, condition_dim):
         raise ValueError(
             f"VLM cache shape must be {(expected_length, condition_dim)}, "
-            f"got {tuple(payload.shape)}"
+            f"got {tuple(conditions.shape)}"
         )
-    return F.normalize(payload.float(), dim=-1)
+    expected = {
+        "drift_generator": "boxcars_camera_drift_dataset",
+        "drift_types": list(args.drift_types),
+        "fixed_severities": args.fixed_severities,
+        "seed": args.seed,
+    }
+    if not isinstance(source_metadata, dict):
+        raise ValueError("VLM cache is missing source_metadata; re-export it from degraded camera views")
+    mismatches = {
+        key: (source_metadata.get(key), value) for key, value in expected.items()
+        if source_metadata.get(key) != value
+    }
+    if mismatches:
+        raise ValueError(f"VLM cache camera-drift metadata mismatch: {mismatches}")
+    return F.normalize(conditions.float(), dim=-1)
 
 
 def choose_active_condition(batch_size, teacher_condition, args, device):
@@ -276,6 +301,8 @@ def main():
         raise ValueError("null condition probability must be in [0, 1]")
     if args.teacher_condition_probability + args.null_condition_probability > 1:
         raise ValueError("teacher + null condition probabilities must not exceed 1")
+    if len(args.drift_weights) != len(args.drift_types):
+        raise ValueError("drift-weights length must match drift-types")
     distributed, local_rank, rank, world_size = setup_distributed()
     device = torch.device("cuda", local_rank)
     random.seed(args.seed + rank)
@@ -305,7 +332,7 @@ def main():
 
     raw = model.module if distributed else model
     condition_cache = load_condition_cache(
-        args.vlm_condition_cache, "train", len(train_set), args.condition_dim
+        args.vlm_condition_cache, "train", len(train_set), args.condition_dim, args
     )
     optimizer = torch.optim.AdamW(
         [p for p in model.parameters() if p.requires_grad],
@@ -318,7 +345,7 @@ def main():
     if rank == 0:
         os.makedirs(expert_dir, exist_ok=True)
         print(
-            f"expert={args.expert_name} drifts={args.drift_types} "
+            f"expert={args.expert_name} camera_drifts={args.drift_types} fixed={args.fixed_severities} "
             f"adapter={count_adapter_parameters(raw):,} train={len(train_set)}",
             flush=True,
         )
@@ -389,7 +416,9 @@ def main():
                 "epoch": epoch,
                 "expert_name": args.expert_name,
                 "drift_types": list(args.drift_types),
-                "severity_range": [args.severity_min, args.severity_max],
+                "fixed_severities": args.fixed_severities,
+                "drift_weights": list(args.drift_weights),
+                "drift_generator": "boxcars_camera_drift_dataset",
                 "validation_drift_accuracy": drift_acc,
                 "validation_clean_accuracy": clean_acc,
                 "r": args.r,

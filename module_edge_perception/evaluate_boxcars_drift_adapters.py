@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from adaptformer import attach_adaptformer, load_adapter_checkpoint, set_adapter_enabled
 from boxcars_dataset import BoxCarsMultiView, VALID_TASKS
-from boxcars_drift_dataset import PairedBoxCarsDriftDataset, SUPPORTED_TRAIN_DRIFTS
+from boxcars_camera_drift_dataset import DRIFTS, PairedBoxCarsCameraDrift
 from model import EarlyFusionMultiViewViT
 
 
@@ -22,6 +22,13 @@ def adapter_spec(value):
     return name, path
 
 
+def corruption_spec(value):
+    name, separator, raw = value.partition("=")
+    if not separator or name not in DRIFTS or not 0.0 <= float(raw) <= 1.0:
+        raise argparse.ArgumentTypeError("corruption spec must be CAMERA_DRIFT=0..1")
+    return name, float(raw)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="BoxCars drift adapter comparison")
     parser.add_argument("--dataset-path", required=True)
@@ -32,7 +39,8 @@ def parse_args():
     parser.add_argument("--model-name", default="vit_small_patch16_224")
     parser.add_argument("--num-views", type=int, default=4)
     parser.add_argument("--r", type=int, default=32)
-    parser.add_argument("--severity", type=float, default=0.8)
+    parser.add_argument("--corruption-spec", type=corruption_spec, action="append",
+                        default=[], help="repeatable; defaults to calibrated BoxCars mixture")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=123)
@@ -73,14 +81,14 @@ def accuracy(model, loader, device, amp_dtype, use_clean=False, conditioned=True
     return {"loss": loss_sum / max(count, 1), "accuracy": correct / max(count, 1), "samples": count}
 
 
-def make_loader(args, base, drift_type):
-    dataset = PairedBoxCarsDriftDataset(
+def make_loader(args, base, drift_type, severity):
+    dataset = PairedBoxCarsCameraDrift(
         base,
         drift_types=(drift_type,),
-        severity_min=args.severity,
-        severity_max=args.severity,
         clean_probability=0.0,
         seed=args.seed,
+        fixed_drift=drift_type,
+        fixed_severity=severity,
     )
     # Keep the limit next to the dataset so accuracy() has a compact signature.
     dataset.max_batches = args.max_batches
@@ -98,8 +106,6 @@ def main():
     args = parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("drift adapter evaluation requires CUDA")
-    if not 0.0 <= args.severity <= 1.0:
-        raise ValueError("severity must be in [0, 1]")
     device = torch.device("cuda")
     transform = transforms.Compose([
         transforms.Resize((224, 224)), transforms.ToTensor(),
@@ -124,12 +130,15 @@ def main():
     attach_adaptformer(model, r=args.r, condition_dim=condition_dim)
     model.to(device).eval()
     amp_dtype = torch.bfloat16 if args.amp_dtype == "bf16" else torch.float16
-    loaders = {
-        drift: make_loader(args, base, drift) for drift in SUPPORTED_TRAIN_DRIFTS
-    }
+    specs = args.corruption_spec or [
+        ("illumination", 1.0), ("motion_blur", .8), ("sensor_noise", .6),
+    ]
+    loaders = {f"{drift}_{severity}": make_loader(args, base, drift, severity)
+               for drift, severity in specs}
     results = {
         "split": args.split,
-        "severity": args.severity,
+        "camera_drift_generator": "boxcars_camera_drift_dataset",
+        "calibrated_corruptions": [f"{drift}={severity}" for drift, severity in specs],
         "baseline": {},
         "adapters": {},
     }
