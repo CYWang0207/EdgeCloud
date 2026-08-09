@@ -58,12 +58,16 @@ teacher mean drift 领先 3.542 pp，准入通过。
 sensor noise 分别提升 1.013、5.915、8.388 pp。clean 下降 1.378 pp。逐条件配对
 bootstrap 95% CI 在交付 JSON 中。
 
-## 正式权重（只有两个新产物）
+## 最终权重与云端 artifact
 
-1. `models/internvit6b_modelnet40_cloud_teacher_20260809/task_head/selected_head.pth`
-   是云端 40 类 task head。
-2. `models/internvit6b_modelnet40_cloud_teacher_20260809/cloud_unlabeled_illumination_tuned/best.pth`
-   是最终向边缘下发的约 1.2 MB Adapter。
+`models/` 只放边缘最终部署权重：
+
+- `models/modelnet40_cloud_teacher_adapter_20260809/cloud_unlabeled/best.pth`
+  是最终向边缘下发的约 1.2 MB Adapter。
+
+云端 40 类 task head 不进入 Edge 部署，作为本次实验 artifact 放在：
+
+- `local/results/modelnet40_cloud_teacher_full_test_20260809/artifacts/teacher_head.pth`
 
 Edge baseline 和冻结 InternViT-6B 是输入依赖，不属于本次新训练权重，也不在上述目录重复存放。
 对照 checkpoint 只保存在 `local/results/`，不得当作正式部署权重。
@@ -72,7 +76,7 @@ Edge baseline 和冻结 InternViT-6B 是输入依赖，不属于本次新训练�
 
 - 主程序：`module_edge_perception/modelnet_cloud_teacher_refresh.py`
 - 轻量交付：`local/delivery/modelnet40_recovery_metrics_20260809/`
-- 完整证据：`local/results/internvit6b_modelnet40_cloud_teacher_20260809/`
+- 完整证据：`local/results/modelnet40_cloud_teacher_full_test_20260809/`
 
 正式运行需要在 GPU 服务器提供 ModelNet40 数据、ModelNet40 Edge baseline 和冻结
 InternViT-6B 路径。脚本会固定 head/refresh/dev split，先生成或复用 feature cache，再依次
