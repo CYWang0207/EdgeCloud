@@ -1,0 +1,6 @@
+{
+  "enabledMcpjsonServers": [
+    "mcp-ankiconnect"
+  ],
+  "enableAllProjectMcpServers": true
+}

@@ -15,7 +15,7 @@
 - MV-ViT 融合同一车辆不同时间、尺度和可见面的观测；
 - Token 剪枝用于动态降低多视图推理开销；
 - 漂移模块模拟明暗、模糊、噪声和遮挡等环境变化；
-- Prompt 模块根据漂移类型生成条件 Prompt，完成轻量适配；
+- 云端视觉教师仅在 `u=1` refresh 时为漂移样本产生监督；边缘运行无条件 AdaptFormer；
 - `view_mask` 可表达轨迹补齐或视图故障。
 
 ## 当前状态
@@ -23,8 +23,14 @@
 - baseline：已完成 30 轮双卡训练；
 - 官方 test 集：Top-1 `88.04%`，Top-5 `97.13%`；
 - 漂移全量重训练链路：已通过真实数据单批次训练验证；
-- Prompt 适配链路：已通过真实数据单批次训练验证；
-- 暂不完整训练后两条链路，待实验对比口径确定后统一运行。
+- 旧 Prompt/VLM-conditioned 适配链路：已归档为消融，不作为正式方案；
+- InternViT-6B 云端 teacher 的特征缓存与 Adapter refresh 链路：首轮代表性样本验证已完成；无上传标签 cloud Adapter 三漂移平均 85.21%，较未适配 Edge 81.97% 提升 3.24 pp，距有标签 Adapter 上界 0.87 pp。
+
+上面的 `88.04%` 是既有 **clean 官方 test** baseline 指标；`81.97%` 是本轮固定
+illumination/blur/noise validation protocol 下的 **三漂移平均**，两者不是同一指标，不能直接相减或混写。
+当前 cloud-teacher 数值也属于开发集证据，因为 task head 和 Adapter 都据此选择。独立 test 的快速检查固定
+checkpoint 后进行，不会据 test 重新选择 head、epoch 或 loss；其范围与限制见
+[`实验状态与证据边界_20260809.md`](实验状态与证据边界_20260809.md)。
 
 ## 主要代码
 
@@ -33,8 +39,9 @@
 | `boxcars_dataset.py` | 官方划分、四逻辑视图和 `view_mask` 加载 |
 | `train_boxcars.py` | BoxCars baseline 训练 |
 | `evaluate_boxcars.py` | 官方 validation/test 评估 |
-| `boxcars_drift_dataset.py` | BoxCars 专用漂移数据包装 |
-| `train_boxcars_retrain_drift.py` | 漂移数据上的全模型重训练 |
-| `train_boxcars_token_prompt.py` | 冻结主体后的 Prompt 适配训练 |
+| `boxcars_camera_drift_dataset.py` | BoxCars 专用相机漂移数据包装与固定强度协议 |
+| `export_boxcars_cloud_teacher_cache.py` | 云端冻结视觉教师导出 task logits / features cache |
+| `train_boxcars_cloud_teacher_adapter.py` | 使用 cloud supervision 刷新无条件 AdaptFormer |
+| `evaluate_boxcars_cloud_teacher_quick_test.py` | 固定 checkpoint 的快速独立 test 检查，保存逐样本预测 |
 
 以上代码均位于 `module_edge_perception/`。数据集和权重只保存在服务器，不提交 Git。

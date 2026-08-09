@@ -1,9 +1,9 @@
 # EdgeCloud · 面向端边云协同推理的分布式感知与全局优化决策系统
 
 > 2026"揭榜挂帅"擂台赛 · 赛题 XH-202606  
-> **核心思路**：云端国产大模型（DeepSeek/VLM）充当"知识预言机"，将场景知识**蒸馏压缩进轻量 AdaptFormer 适配器**下发到边缘 ViT 旁路；边缘 MV-ViT 主干冻结 + adapter 可训练，负责实时多视角推理；调度层通过 Actor-Critic + Lyapunov 优化在线决策。  
+> **当前核心思路**：云端冻结大型视觉基础模型 InternViT-6B，并训练 BoxCars 任务头；其漂移样本 logits/features 被压缩进轻量 AdaptFormer。边缘只运行 MV-ViT-S + adapter，调度层通过 Actor-Critic + Lyapunov 决定何时刷新。
 > **压缩的不是参数，是云端大模型蒸馏出来的场景知识；传输的不是模型，是压缩后的小适配器。**  
-> 2026-08-03 团队拍板采用 Adapter 方案；prompt 注入降为可选辅助。
+> 当前 worktree 不再维护 Prompt/VLM-conditioned 路线；历史实现统一放在 `local/archive/`。
 
 ## 团队成员
 
@@ -24,12 +24,12 @@ EdgeCloud/
 ├── module_edge_perception/         # 模块一：边缘实时感知
 │   ├── model.py                     #   EarlyFusionMultiViewViT（多视角早期融合 + token剪枝 + 视角掩码）
 │   ├── adaptformer.py              #   AdaptFormer PEFT 模块（已落地，8/3 验收通过）
-│   ├── train_adapter.py             #   Adapter 蒸馏训练（云端软标签→只训 adapter）
+│   ├── export_boxcars_cloud_teacher_cache.py # 云端视觉监督导出
+│   ├── train_boxcars_cloud_teacher_adapter.py # 只训练/下发 adapter
 │   ├── verify_adaptformer.py        #   AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 │   ├── boxcars_dataset.py           #   场景二 BoxCars116k 数据加载
 │   ├── dataset.py / drift_dataset.py
-│   ├── prompt_tuning/               #   Prompt 生成器（可选辅助）
-│   ├── train*.py                    #   训练脚本（ModelNet40 / BoxCars / 漂移重训 / Prompt）
+│   ├── train*.py                    #   Edge baseline 与 cloud-guided Adapter
 │   └── benchmarks/                  #   TTFT / 内存 / 延迟 / 一体化测量
 │
 ├── module_scheduling/              # 模块二：云边协同调度
@@ -49,9 +49,9 @@ EdgeCloud/
 
 ```
          +---------- 云端 Cloud ----------+
-         | DeepSeek / VLM "知识预言机"     |   ← 冻结，不训练
-         | · 分析关键帧 -> 判断环境状态     |
-         | · 蒸馏监督 AdaptFormer adapter  |
+         | InternViT-6B 视觉教师           |   ← 冻结 backbone
+         | · BoxCars task head             |
+         | · 输出漂移 logits / features    |
          | · 多节点冲突仲裁                |
          +---+--------------------+------+
    上行关键帧 |                    | 下行 adapter 参数（几百KB~MB）/ 重训权重
@@ -76,7 +76,7 @@ EdgeCloud/
 
 ## 方案亮点
 
-1. **知识压缩替代参数压缩**：DeepSeek/VLM 在云端分析场景、产软标签，把知识蒸馏压缩进 AdaptFormer adapter（几百KB~MB）下发边缘，而非把 175B 模型蒸馏到 10M
+1. **鲁棒视觉监督压缩**：云端大型视觉模型产生任务对齐 logits/features，只把约 0.3M 参数的 AdaptFormer 增量下发边缘
 2. **多粒度资源调度**：每时隙联合决策视角选择、Token 剪枝率、协同模式，KKT 注水闭式解保证 ms 级决策
 3. **理论保证**：Lyapunov 强稳定性证明、O(1/V) 效用逼近界、KKT 最优性条件
 4. **多源异构**：四路摄像头天然异构（光照/遮挡/视角各异），MV-ViT 早期融合统一处理

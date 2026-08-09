@@ -1,130 +1,52 @@
-# 模块一：边缘实时感知
+# 边缘感知与云端视觉教师
 
-## 职责
+本 worktree 只维护当前正式路线：冻结 `InternViT-6B-224px` 云端视觉主干，训练
+BoxCars 任务分类头，用漂移样本上的 teacher logits/features 监督
+`MV-ViT-S + AdaptFormer`，最终只向边缘下发 adapter 权重。
 
-- MV-ViT 多视角推理（ViT-Small, 2200万参数, 4视角早期融合）
-- AdaptFormer adapter：FFN 旁路 PEFT，主干冻结只训 adapter（已落地，8/3 验收通过）
-- Token 剪枝：运行时动态保留率 k_t
-- 漂移模拟与感知：5种环境漂移 + 香农熵 Edrift + 结构性漂移
-- Prompt 注入：旧方案遗留，作"环境漂移快响应"可选辅助（存在两套实现，待清理）
-- 性能测量：TTFT、推理延迟、GPU 内存
+## 当前主线
 
-## 对标指标
+1. `evaluate_boxcars_cloud_teacher.py`：五分钟以内的 prototype 小样本排雷；不作为正式结果。
+2. `train_boxcars_cloud_teacher_head.py`：云端冻结 InternViT，缓存 clean + 相机退化训练集特征并训练 linear/MLP 分类头。
+3. 在独立 validation 的 clean、illumination、motion blur、sensor noise 上验证 teacher。
+4. teacher 明显超过对应 edge baseline 后，导出 task logits/features cache。
+5. `train_boxcars_cloud_teacher_adapter.py`：只训练无条件 AdaptFormer 和训练期 projector。
+6. 下发 adapter-only checkpoint；InternViT 和 projector 均不进入 edge forward。
 
-| 指标 | 要求 | 方法 |
-|------|------|------|
-| 边侧参数量 | 千万级 | ViT-Small 2200万 |
-| TTFT | 降低 >= 75% | Token 剪枝 |
-| 推理内存 | <= 1.5GB | ViT-Small + 剪枝 |
+这里的“无标签”是指代表性上传轨迹在云端刷新时不需要人工品牌标签；并不表示训练阶段没有
+BoxCars 标签。标签只用于预先训练冻结 InternViT feature 上的任务 head，以及构造
+`label-only` 对照上界。
 
-## 目录约定（实际为扁平结构，非子目录）
+## 已有开发集结果的正确用法
 
-```
-module_edge_perception/
-├── model.py                          # MV-ViT 模型（EarlyFusionMultiViewViT）
-├── adaptformer.py                    # AdaptFormer PEFT 模块（已落地，8/3 验收通过）
-├── train_adapter.py                  # 旧 VLM 类别软标签蒸馏实验（不用于漂移校正主线）
-├── train_boxcars_drift_adapter.py    # 成对干净/漂移监督的 Adapter 专家训练
-├── evaluate_boxcars_drift_adapters.py # baseline/统一/专家 Adapter 同条件评估
-├── verify_adaptformer.py             # AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
-├── boxcars_dataset.py                # 场景二 BoxCars116k 数据加载（4逻辑视图 + view_mask）
-├── boxcars_drift_dataset.py          # BoxCars 漂移包装
-├── train_boxcars.py                  # BoxCars baseline DDP 训练（test Top-1=88.04%）
-├── evaluate_boxcars.py               # BoxCars 官方评估
-├── train_boxcars_retrain_drift.py    # BoxCars 漂移全量重训
-├── train_boxcars_token_prompt.py     # BoxCars Prompt 适配训练（过渡）
-├── test_boxcars_inference.py         # BoxCars→MV-ViT 前向冒烟测试
-├── dataset.py                        # 场景一 ModelNet40 数据加载
-├── train.py / train_retrain_drift.py / train_token_prompt.py  # 场景一训练
-├── test.py / evaluate_train_set.py   # 场景一评估
-├── prompt_tuning/                    # PromptGenerator（可选辅助，存在两套实现待清理）
-└── benchmarks/                       # TTFT / 内存 / 延迟 / 一体化测量
-```
+`cloud-unlabeled` 是当前正式 `u=1` 产物：它使用 `KD + feature + clean anchor`，不使用
+上传样本的 CE。在完整 validation 上，它的三漂移平均为 85.21%，高于 Edge baseline 的
+81.97%，且只低于有标签 label-only 上界 0.87 pp。另一方面，`CE + KD + feature + anchor`
+的 hybrid 为 85.67%，低于 label-only 的 86.08%。因此不要把 hybrid 当主路线，也不要声称
+teacher 在已有标签时必然提升 CE；它的实际作用是替代缺失的上传样本标签。
 
+这些数值用于开发选择，尚不是全量官方 test 最终结论。快速独立检查使用
+`evaluate_boxcars_cloud_teacher_quick_test.py`：固定已有 checkpoint，在官方 `test` split
+中抽取可复核的 class-stratified 子集，保存 sample indices、逐条预测和配对 bootstrap 区间。
+完整的方法、结果边界和当前建议见
+[`docs/实验状态与证据边界_20260809.md`](../docs/实验状态与证据边界_20260809.md)。
 
-## 负责人任务
+## 保留代码
 
-- 测量 TTFT、推理延迟、GPU 内存
-- Token 剪枝前后对比实验
-- 换 ViT-Tiny（如需更小模型）只需改一行 model_name 参数
+- `model.py`、`adaptformer.py`：边缘 MV-ViT 和 Adapter。
+- `boxcars_dataset.py`、`boxcars_camera_drift_dataset.py`：四视图数据与固定相机漂移。
+- `train_boxcars.py`、`evaluate_boxcars.py`：edge baseline。
+- `evaluate_boxcars_cloud_teacher.py`：限时零训练 sanity check。
+- `evaluate_boxcars_cloud_teacher_quick_test.py`：固定 checkpoint 的快速独立 test 检查；不是训练，也不会按 test 重选模型。
+- `train_boxcars_cloud_teacher_head.py`：正式 task head 训练与四种条件的独立准入验证。
+- `retrain_boxcars_cloud_teacher_head_from_cache.py`：复用已提取特征，快速比较 noise 加权/专用 head。
+- `build_boxcars_teacher_cache_from_feature_cache.py`：复用随机强度 train features，以 selected head 生成正式监督。
+- `export_boxcars_cloud_teacher_cache.py`：加载已训练 task head，导出严格对齐的云端监督缓存。
+- `train_boxcars_cloud_teacher_adapter.py`：新 u=1 Adapter refresh。
+- `summarize_boxcars_cloud_teacher_pipeline.py`：汇总 condition-wise 对照并执行最终增益 gate。
+- `benchmarks/`：边缘时延、显存和端到端评测。
 
-## BoxCars 漂移 Adapter 实验
+旧 VLM condition、VLM soft-label、Prompt、全量漂移重训和旧 Adapter 专家实验均已移至
+`local/archive/legacy_methods_20260809/`，不再从这里调用。
 
-漂移校正直接使用 BoxCars 的真实类别标签，不使用通用 VLM 的车辆品牌软标签。
-训练集按样本独立采样漂移，避免旧的时间 schedule 将漂移类型与数据集顺序混淆；
-损失由漂移分类、干净/漂移 CLS 特征对齐、干净基线输出一致性三部分组成。
-
-先训练一个统一兜底 Adapter：
-
-```bash
-torchrun --standalone --nproc_per_node=2 train_boxcars_drift_adapter.py \
-  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --expert-name general \
-  --drift-types bright,dark,blur,noise,occlusion
-```
-
-只有统一 Adapter 在某类漂移上恢复不足时，再训练该类专家，例如：
-
-```bash
-torchrun --standalone --nproc_per_node=2 train_boxcars_drift_adapter.py \
-  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --expert-name blur --drift-types blur
-```
-
-统一在相同样本、相同漂移和相同强度下比较，不用训练时的随机 batch 精度下结论：
-
-```bash
-python evaluate_boxcars_drift_adapters.py \
-  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --adapter general=checkpoints/boxcars_drift_adapters/general/best.pth \
-  --adapter blur=checkpoints/boxcars_drift_adapters/blur/best.pth \
-  --severity 0.8 --output-json checkpoints/drift_adapter_comparison.json
-```
-
-建议先跑 baseline 漂移矩阵，再训练 `general`；只有专家相对 `general` 有稳定收益时才保留
-Adapter bank。当前人工模拟类型可直接作为路由 oracle，VLM 只作为未来真实场景中的可选漂移识别器。
-
-### 连续 VLM 条件与视图可靠性（升级版）
-
-新训练链路用连续环境向量对每层 AdaptFormer 做 FiLM 调制，并显式预测每个视图的可靠性。
-不提供 VLM 缓存时可先训练纯边缘条件闭环：
-
-```bash
-python train_boxcars_drift_adapter.py \
-  --dataset-path /path/to/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --expert-name conditioned_general \
-  --independent-view-drifts --condition-dim 128
-```
-
-VLM hidden states 采用离线缓存。原始文件按 split 保存 `[N, ..., D]` tensor，先统一池化、PCA
-和归一化，再传给训练脚本：
-
-```bash
-python export_boxcars_vlm_hidden_states.py \
-  --dataset-path /path/to/BoxCars116k \
-  --model-path ../models/Qwen3-VL-8B-Instruct-4bit-group \
-  --output checkpoints/qwen3vl_train_hidden_states.pt \
-  --split train --independent-view-drifts --save-every 500
-
-python prepare_vlm_condition_cache.py \
-  --input checkpoints/qwen3vl_train_hidden_states.pt \
-  --output checkpoints/vlm_conditions_128.pt \
-  --condition-dim 128
-
-python train_boxcars_drift_adapter.py \
-  --dataset-path /path/to/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --expert-name vlm_conditioned_general \
-  --independent-view-drifts --condition-dim 128 \
-  --vlm-condition-cache checkpoints/vlm_conditions_128.pt
-```
-
-若导出被中断，使用完全相同的参数并追加 `--resume`；脚本会校验数据集、
-漂移配置、随机种子和视觉层配置后，从最后一次原子保存的样本继续。
-
-默认只训练 Adapter、FiLM、边缘环境编码器和坏视图 token；`norm` 与 `head` 保持冻结，以便
-隔离真正的漂移校正收益。需要做解冻消融时再加 `--train-norm` 或 `--train-head`。
+详细方案见 `docs/云端视觉教师Adapter方案_20260809.md`。

@@ -101,9 +101,14 @@ def attach_adaptformer(model, r: int = 32, scale: float = 1.0,
         raise ValueError("model 缺少 blocks 属性或为空，无法挂载 AdaptFormer")
     dim = _block_embed_dim(model.blocks[0])
     for block in model.blocks:
-        block.mlp = AdaptFormerMLPWrapper(
-            block.mlp, dim, r=r, scale=scale, condition_dim=condition_dim
+        original = block.mlp
+        wrapper = AdaptFormerMLPWrapper(
+            original, dim, r=r, scale=scale, condition_dim=condition_dim
         )
+        reference = next(original.parameters(), None)
+        if reference is not None:
+            wrapper.to(device=reference.device, dtype=reference.dtype)
+        block.mlp = wrapper
     return model
 
 
@@ -186,7 +191,7 @@ def set_adapter_enabled(model, enabled: bool):
     return model
 
 
-def collect_adapter_state(model) -> dict:
+def collect_adapter_state(model, include_norm_head: bool = True) -> dict:
     """收集仅 adapter（含 scale）+ norm + head 的参数，供云端下发（几百 KB~MB）。
 
     主干（patch_embed / pos_embed / blocks 原 FFN 等）一律不收集。
@@ -197,7 +202,7 @@ def collect_adapter_state(model) -> dict:
         if (
             "mlp.adapter." in name
             or name.endswith("mlp.scale")
-            or name.startswith(("norm.", "head."))
+            or (include_norm_head and name.startswith(("norm.", "head.")))
             or name.startswith("drift_conditioner.")
             or name == "bad_view_token"
         ):
@@ -205,13 +210,13 @@ def collect_adapter_state(model) -> dict:
     return state
 
 
-def save_adapter_checkpoint(path, model, **meta):
+def save_adapter_checkpoint(path, model, include_norm_head: bool = True, **meta):
     """以 adapter-only 格式保存蒸馏产物：{"adapter": {...}, **meta}。
 
     adapter 子字典只含 blocks.*.mlp.adapter.* / blocks.*.mlp.scale / norm / head，
     体积 ≈ 0.3M 参 × 4B ≈ 1.2MB，对应接口契约 u=1 的 S_adapter 通信口径。
     """
-    payload = {"adapter": collect_adapter_state(model)}
+    payload = {"adapter": collect_adapter_state(model, include_norm_head=include_norm_head)}
     payload.update(meta)
     torch.save(payload, path)
 
