@@ -1,7 +1,7 @@
 # EdgeCloud · 面向端边云协同推理的分布式感知与全局优化决策系统
 
 > 2026"揭榜挂帅"擂台赛 · 赛题 XH-202606  
-> **当前核心思路**：云端冻结大型视觉基础模型 InternViT-6B，并训练 BoxCars 任务头；其漂移样本 logits/features 被压缩进轻量 AdaptFormer。边缘只运行 MV-ViT-S + adapter，调度层通过 Actor-Critic + Lyapunov 决定何时刷新。
+> **当前核心思路**：云端冻结大型视觉基础模型 InternViT-6B，分别训练 ModelNet40 / BoxCars 任务头；其漂移样本 logits/features 被压缩进轻量 AdaptFormer。边缘只运行 MV-ViT-S + adapter，调度层通过 Actor-Critic + Lyapunov 决定何时刷新。
 > **压缩的不是参数，是云端大模型蒸馏出来的场景知识；传输的不是模型，是压缩后的小适配器。**  
 > 当前 worktree 不再维护 Prompt/VLM-conditioned 路线；历史实现统一放在 `local/archive/`。
 
@@ -26,6 +26,7 @@ EdgeCloud/
 │   ├── adaptformer.py              #   AdaptFormer PEFT 模块（已落地，8/3 验收通过）
 │   ├── export_boxcars_cloud_teacher_cache.py # 云端视觉监督导出
 │   ├── train_boxcars_cloud_teacher_adapter.py # 只训练/下发 adapter
+│   ├── modelnet_cloud_teacher_refresh.py # ModelNet40 端到端 teacher gate / Adapter / full test
 │   ├── verify_adaptformer.py        #   AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 │   ├── boxcars_dataset.py           #   场景二 BoxCars116k 数据加载
 │   ├── dataset.py / drift_dataset.py
@@ -39,7 +40,7 @@ EdgeCloud/
 │
 ├── common/                          # 漂移模拟器（5种×6档 schedule）
 ├── data/                            # 数据集（不进 Git：ModelNet40、BoxCars116k）
-├── models/                          # 模型权重（不进 Git；checkpoints 当前为 0 字节占位）
+├── models/                          # 本地模型权重（不进 Git；正式 ModelNet40 新权重为 task head + Adapter）
 ├── scripts/                         # 一键运行脚本
 ├── docs/                            # 方案文档
 └── requirements.txt                 # Python 依赖
@@ -50,7 +51,7 @@ EdgeCloud/
 ```
          +---------- 云端 Cloud ----------+
          | InternViT-6B 视觉教师           |   ← 冻结 backbone
-         | · BoxCars task head             |
+         | · ModelNet40 / BoxCars task head|
          | · 输出漂移 logits / features    |
          | · 多节点冲突仲裁                |
          +---+--------------------+------+

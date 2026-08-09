@@ -1,8 +1,15 @@
 # 边缘感知与云端视觉教师
 
-本 worktree 只维护当前正式路线：冻结 `InternViT-6B-224px` 云端视觉主干，训练
-BoxCars 任务分类头，用漂移样本上的 teacher logits/features 监督
+本 worktree 只维护当前正式路线：冻结 `InternViT-6B-224px` 云端视觉主干，分别训练
+ModelNet40 / BoxCars 任务分类头，用漂移样本上的 teacher logits/features 监督
 `MV-ViT-S + AdaptFormer`，最终只向边缘下发 adapter 权重。
+
+ModelNet40 已完成完整 official test。其新方法入口是
+`modelnet_cloud_teacher_refresh.py`：保留四视图各自的 3,200D InternViT feature，使用
+9,043 条离线有标签 train 轨迹训练 40 类 task head；320 条互斥 dev 执行 teacher gate，
+480 条互斥 refresh 轨迹只提供 cloud logits/features，不在正式 Adapter loss 中读取标签。
+针对白底、光滑、轮廓主导的渲染物体，最终版对 illumination 轨迹过采样并增强 task-logit
+KD，由 dev 在保持 clean/defocus/noise 的约束下选择配置。
 
 ## 当前主线
 
@@ -31,9 +38,16 @@ teacher 在已有标签时必然提升 CE；它的实际作用是替代缺失的
 完整的方法、结果边界和当前建议见
 [`docs/实验状态与证据边界_20260809.md`](../docs/实验状态与证据边界_20260809.md)。
 
+ModelNet40 则已有 2,468 条完整 official test：最终无标签 Adapter 将三漂移平均准确率从
+87.318% 提升至 92.423%（+5.105 pp）；illumination / defocus / sensor noise 分别提升
++1.013 / +5.915 / +8.388 pp，clean 代价为 -1.378 pp。详细协议、权重和证据见
+[`docs/第一场景_ModelNet40.md`](../docs/第一场景_ModelNet40.md)。
+
 ## 保留代码
 
 - `model.py`、`adaptformer.py`：边缘 MV-ViT 和 Adapter。
+- `dataset.py`、`modelnet_camera_drift_dataset.py`：ModelNet40 四视图数据与相机漂移。
+- `modelnet_cloud_teacher_refresh.py`：ModelNet40 大 ViT task head、teacher gate、无标签刷新、对照及完整 test。
 - `boxcars_dataset.py`、`boxcars_camera_drift_dataset.py`：四视图数据与固定相机漂移。
 - `train_boxcars.py`、`evaluate_boxcars.py`：edge baseline。
 - `evaluate_boxcars_cloud_teacher.py`：限时零训练 sanity check。
