@@ -1,8 +1,8 @@
 # EdgeCloud · 面向端边云协同推理的分布式感知与全局优化决策系统
 
 > 2026"揭榜挂帅"擂台赛 · 赛题 XH-202606  
-> **核心思路**：针对每个感知场景先校准真实相机退化，再以 clean/corrupt 成对监督训练轻量 AdaptFormer Adapter；边缘 MV-ViT 主干冻结，仅加载场景专用 Adapter，调度层通过 Actor-Critic + Lyapunov 优化在线决策。
-> **下发的是约 1.2–1.3MB 的 Adapter-only 参数包，不是整模型。** 当前已验证 BoxCars116k 与 ModelNet40 两套彼此隔离的相机退化 Adapter。
+> **核心思路**：云端大 ViT 先在离线标注集上训练场景分类头，再对代表性漂移样本生成教师输出；边缘侧在不使用这些样本真实标签的条件下蒸馏轻量 AdaptFormer Adapter。边缘 MV-ViT 主干冻结，仅加载场景专用 Adapter，调度层通过 Actor-Critic + Lyapunov 优化在线决策。
+> **下发的是 Adapter-only 参数包，不是大 ViT 或整套边缘模型。** 当前正式流程已覆盖 BoxCars116k 与 ModelNet40，并将任务头训练、无标签刷新、开发集选型和官方测试集终评隔离。
 
 ## 团队成员
 
@@ -23,8 +23,8 @@ EdgeCloud/
 ├── module_edge_perception/         # 模块一：边缘实时感知
 │   ├── model.py                     #   EarlyFusionMultiViewViT（多视角早期融合 + token剪枝 + 视角掩码）
 │   ├── adaptformer.py              #   AdaptFormer PEFT 模块（已落地，8/3 验收通过）
-│   ├── train_boxcars_camera_adapter.py # BoxCars 相机退化成对训练
-│   ├── train_modelnet_drift_adapter.py # ModelNet40 相机退化成对训练
+│   ├── train_boxcars_cloud_teacher_adapter.py # BoxCars 云教师无标签刷新
+│   ├── modelnet_cloud_teacher_refresh.py # ModelNet40 完整云教师流程
 │   ├── verify_adaptformer.py        #   AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 │   ├── boxcars_dataset.py           #   场景二 BoxCars116k 数据加载
 │   ├── dataset.py / drift_dataset.py
