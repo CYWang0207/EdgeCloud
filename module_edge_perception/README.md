@@ -32,11 +32,29 @@ BoxCars 标签。标签只用于预先训练冻结 InternViT feature 上的任�
 的 hybrid 为 85.67%，低于 label-only 的 86.08%。因此不要把 hybrid 当主路线，也不要声称
 teacher 在已有标签时必然提升 CE；它的实际作用是替代缺失的上传样本标签。
 
-这些数值用于开发选择，尚不是全量官方 test 最终结论。快速独立检查使用
-`evaluate_boxcars_cloud_teacher_quick_test.py`：固定已有 checkpoint，在官方 `test` split
-中抽取可复核的 class-stratified 子集，保存 sample indices、逐条预测和配对 bootstrap 区间。
-完整的方法、结果边界和当前建议见
-[`docs/实验状态与证据边界_20260809.md`](../docs/实验状态与证据边界_20260809.md)。
+这些开发集数值用于模型选择；独立的全量官方 test 结论见下一节。固定 checkpoint 的检查
+入口是 `evaluate_boxcars_cloud_teacher_quick_test.py`：在官方 `test` split 中抽取可复核的
+class-stratified 子集（默认 256 条）或（`--samples 0`）全量评估，保存 sample indices、
+逐条预测和配对 bootstrap 区间，且不会按 test 重选任何模型。完整的方法、结果边界见
+[`docs/第二场景_BoxCars116k.md`](../docs/第二场景_BoxCars116k.md)。
+
+## 完整官方 test（12,322 条）
+
+固定开发阶段 checkpoint（Edge baseline 与 `cloud_unlabeled/best.pth`），在官方 `test`
+split 全量 12,322 条 × 4 条件的逐样本配对评估；未按 test 重选 head、epoch 或 loss。
+`evaluate_boxcars_cloud_teacher_quick_test.py --samples 0` 可省略 teacher 参数跳过 6B
+推理，只评 Edge/Adapter 两组模型，约 7 分钟：
+
+| Model | Clean | Illumination | Blur | Noise | Mean drift |
+|---|---:|---:|---:|---:|---:|
+| Edge baseline | 88.04% | 74.03% | 77.57% | 71.77% | 74.46% |
+| Cloud unlabeled Adapter | 88.09% | 78.45% | 79.51% | 79.10% | 79.02% |
+
+Adapter 相对 Edge 的三漂移平均提升 **+4.56 pp**，逐条件 2,000 次配对 bootstrap 95% CI
+全部不跨 0：illumination +4.42 pp（[+3.95, +4.90]）、blur +1.94 pp（[+1.57, +2.31]）、
+noise +7.33 pp（[+6.77, +7.90]）；clean 基本持平 +0.06 pp（[-0.20, +0.31]）。这补齐了
+256 条快速检查中 illumination/blur 区间跨 0 的限制。完整证据位于
+`local/results/boxcars_cloud_teacher_full_test_20260810/`。
 
 ModelNet40 则已有 2,468 条完整 official test：最终无标签 Adapter 将三漂移平均准确率从
 87.318% 提升至 92.423%（+5.105 pp）；illumination / defocus / sensor noise 分别提升
@@ -51,7 +69,7 @@ ModelNet40 则已有 2,468 条完整 official test：最终无标签 Adapter 将
 - `boxcars_dataset.py`、`boxcars_camera_drift_dataset.py`：四视图数据与固定相机漂移。
 - `train_boxcars.py`、`evaluate_boxcars.py`：edge baseline。
 - `evaluate_boxcars_cloud_teacher.py`：限时零训练 sanity check。
-- `evaluate_boxcars_cloud_teacher_quick_test.py`：固定 checkpoint 的快速独立 test 检查；不是训练，也不会按 test 重选模型。
+- `evaluate_boxcars_cloud_teacher_quick_test.py`：固定 checkpoint 的独立 test 评估，默认 256 条 class-stratified 子集，`--samples 0` 跑全量 12,322 条；teacher 参数可省略；不是训练，也不会按 test 重选模型。
 - `train_boxcars_cloud_teacher_head.py`：正式 task head 训练与四种条件的独立准入验证。
 - `retrain_boxcars_cloud_teacher_head_from_cache.py`：复用已提取特征，快速比较 noise 加权/专用 head。
 - `build_boxcars_teacher_cache_from_feature_cache.py`：复用随机强度 train features，以 selected head 生成正式监督。
@@ -63,4 +81,5 @@ ModelNet40 则已有 2,468 条完整 official test：最终无标签 Adapter 将
 旧 VLM condition、VLM soft-label、Prompt、全量漂移重训和旧 Adapter 专家实验均已移至
 `local/archive/legacy_methods_20260809/`，不再从这里调用。
 
-详细方案见 `docs/云端视觉教师Adapter方案_20260809.md`。
+方法要点与实验总览见 `docs/实验结果总览_20260809.md`；完整方法设计见归档文档
+`local/archive/status_docs_20260810/云端视觉教师Adapter方案_20260809.md`。

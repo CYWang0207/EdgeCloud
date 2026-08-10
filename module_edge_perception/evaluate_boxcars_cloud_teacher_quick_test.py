@@ -9,10 +9,12 @@ The sampler therefore preserves the broad class mix while retaining every make
 that can be represented.  This is sufficient for a quick independent direction check, but explicitly not
 a replacement for a full-test statistical report.
 
-It evaluates the three models needed for the system claim:
+It evaluates the models needed for the system claim:
   - frozen Edge MV-ViT-S baseline;
   - the existing label-free cloud-guided AdaptFormer refresh;
-  - frozen InternViT-6B plus the already-selected BoxCars task head.
+  - optionally, frozen InternViT-6B plus the already-selected BoxCars task
+    head.  Omit ``--teacher-model-path``/``--teacher-head-checkpoint`` to skip
+    the expensive 6B pass; the Edge-versus-Adapter paired claim does not need it.
 
 For every condition it writes the exact sampled indices and per-track
 predictions, so the Edge-versus-Adapter comparison is paired and reproducible.
@@ -77,8 +79,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset-path", required=True)
     parser.add_argument("--baseline-checkpoint", required=True)
     parser.add_argument("--adapter-checkpoint", required=True)
-    parser.add_argument("--teacher-model-path", required=True)
-    parser.add_argument("--teacher-head-checkpoint", required=True)
+    parser.add_argument("--teacher-model-path", default="",
+                        help="leave empty to skip the 6B teacher evaluation")
+    parser.add_argument("--teacher-head-checkpoint", default="",
+                        help="leave empty to skip the 6B teacher evaluation")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--samples", type=int, default=256,
                         help="deterministic class-stratified official-test sample; 0 means the full test split")
@@ -296,11 +300,15 @@ def main() -> None:
     device = torch.device("cuda")
     base = base_dataset(args.dataset_path)
     indices = stratified_indices(base, args.samples, args.seed)
+    is_full = len(indices) == len(base)
+    run_teacher = bool(args.teacher_model_path and args.teacher_head_checkpoint)
+    if bool(args.teacher_model_path) != bool(args.teacher_head_checkpoint):
+        raise ValueError("--teacher-model-path and --teacher-head-checkpoint must be given together")
     datasets = {name: make_condition_dataset(base, indices, *spec) for name, spec in SPECS.items()}
     started = time.time()
     records: list[dict] = []
     metrics: dict[str, dict[str, float]] = {
-        "Edge baseline": {}, "Cloud unlabeled Adapter": {}, "Cloud teacher": {},
+        "Edge baseline": {}, "Cloud unlabeled Adapter": {},
     }
 
     edge = load_edge_model(args.baseline_checkpoint, args.adapter_checkpoint, len(base.classes), device)
@@ -313,37 +321,44 @@ def main() -> None:
     del edge
     torch.cuda.empty_cache()
 
-    teacher, head, head_payload = load_teacher(args.teacher_model_path, args.teacher_head_checkpoint, device)
-    for name, dataset in datasets.items():
-        score, rows = evaluate_teacher(teacher, head, loader(dataset, args.teacher_batch_size, args.num_workers), name, device)
-        records.extend(rows)
-        metrics["Cloud teacher"][name] = score
-        print(f"teacher {name}: {score:.4%}", flush=True)
-    del teacher, head
-    torch.cuda.empty_cache()
+    head_payload = None
+    if run_teacher:
+        metrics["Cloud teacher"] = {}
+        teacher, head, head_payload = load_teacher(args.teacher_model_path, args.teacher_head_checkpoint, device)
+        for name, dataset in datasets.items():
+            score, rows = evaluate_teacher(teacher, head, loader(dataset, args.teacher_batch_size, args.num_workers), name, device)
+            records.extend(rows)
+            metrics["Cloud teacher"][name] = score
+            print(f"teacher {name}: {score:.4%}", flush=True)
+        del teacher, head
+        torch.cuda.empty_cache()
 
     for model_metrics in metrics.values():
         model_metrics["mean_drift"] = sum(model_metrics[name] for name in SPECS if name != "clean") / 3
+    scope = {
+        "split": "official BoxCars116k test",
+        "evaluation_type": ("full official test split" if is_full
+                            else "fixed deterministic class-stratified quick subset"),
+        "samples": len(indices),
+        "full_test_samples": len(base),
+        "selection_statement": "No checkpoint, head, epoch, or loss weight was selected from these test results.",
+    }
+    if not is_full:
+        scope["limitation"] = "This is a rapid independent test check, not a full-test final statistical report."
     result = {
-        "scope": {
-            "split": "official BoxCars116k test",
-            "evaluation_type": "fixed deterministic class-stratified quick subset",
-            "samples": len(indices),
-            "full_test_samples": len(base),
-            "selection_statement": "No checkpoint, head, epoch, or loss weight was selected from these test results.",
-            "limitation": "This is a rapid independent test check, not a full-test final statistical report.",
-        },
+        "scope": scope,
         "conditions": {name: {"drift": spec[0] or "normal", "severity": spec[1]} for name, spec in SPECS.items()},
         "sample_indices": indices,
         "sample_class_counts": {base.classes[label]: sum(base.samples[index][1] == label for index in indices)
                                 for label in range(len(base.classes))},
         "models": metrics,
         "paired_bootstrap_adapter_minus_edge": paired_bootstrap(records, args.bootstrap_resamples, args.seed + 1),
-        "teacher_head": {key: head_payload.get(key) for key in ("teacher", "head_mode", "feature_dim", "hidden_dim", "best_epoch")},
+        "teacher_head": ({key: head_payload.get(key) for key in ("teacher", "head_mode", "feature_dim", "hidden_dim", "best_epoch")}
+                         if head_payload is not None else None),
         "checkpoints": {
             "baseline": os.path.abspath(args.baseline_checkpoint),
             "cloud_unlabeled_adapter": os.path.abspath(args.adapter_checkpoint),
-            "teacher_head": os.path.abspath(args.teacher_head_checkpoint),
+            "teacher_head": os.path.abspath(args.teacher_head_checkpoint) if run_teacher else None,
         },
         "elapsed_seconds": time.time() - started,
     }
@@ -353,9 +368,13 @@ def main() -> None:
         for row in records:
             handle.write(json.dumps(row) + "\n")
     with open(os.path.join(args.output_dir, "summary.md"), "w", encoding="utf-8") as handle:
-        handle.write("# Quick independent BoxCars test check\n\n")
-        handle.write("This is a fixed, deterministic, stratified subset of the official test split. "
-                     "It is not the full-test final report.\n\n")
+        if is_full:
+            handle.write("# BoxCars official test full evaluation\n\n")
+            handle.write("This run evaluates the complete official test split with all checkpoints fixed in advance.\n\n")
+        else:
+            handle.write("# Quick independent BoxCars test check\n\n")
+            handle.write("This is a fixed, deterministic, stratified subset of the official test split. "
+                         "It is not the full-test final report.\n\n")
         handle.write("| Model | Clean | Illumination | Blur | Noise | Mean drift |\n|---|---:|---:|---:|---:|---:|\n")
         for model_name, value in metrics.items():
             handle.write(f"| {model_name} | {value['clean']:.2%} | {value['illumination_1.0']:.2%} | "
