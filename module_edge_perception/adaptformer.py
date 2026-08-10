@@ -177,7 +177,7 @@ def load_adapter_checkpoint(model, path, device="cpu"):
     """把 adapter 权重加载进已 attach 的 model（不覆盖冻结主干）。
 
     兼容两种格式：
-    - {"adapter": {...}, "norm": {...}, "head": {...}}（train_adapter 产出）
+    - {"adapter": {...}, "norm": {...}, "head": {...}}（adapter-only 训练产出）
     - 整模型 state_dict（含 blocks.*.mlp.adapter.*，如 baseline 风格 checkpoint）
     返回 (missing, unexpected)。
     """
