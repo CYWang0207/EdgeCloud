@@ -44,7 +44,8 @@ def parse_args():
     parser.add_argument("--min-active-views", type=float, default=3.0,
                         help="Minimum active views per slot. Use 3 to guarantee average >= 2.5.")
     parser.add_argument("--m-candidates", type=int, default=10, help="Actor candidate count before u cross product.")
-    parser.add_argument("--scl-weights", type=float, default=50.0, help="Bandwidth cost of retrained model weights.")
+    parser.add_argument("--scl-weights", type=float, default=None,
+                        help="Deprecated alias for --u2-update-size-mb.")
     parser.add_argument("--alpha-env", type=float, default=0.4, help="Local accuracy penalty weight for E_drift.")
     parser.add_argument("--alpha-struct", type=float, default=0.3, help="Accuracy penalty weight for structural drift.")
     parser.add_argument("--retrain-bonus", type=float, default=0.2, help="Extra gain from retraining under severe structural drift.")
@@ -65,7 +66,8 @@ def parse_args():
         default=DEFAULT_ACC_FLOOR,
         help=f"业务可用 Critic quality proxy_acc 下限，默认 {DEFAULT_ACC_FLOOR}",
     )
-    parser.add_argument("--business-min-active-views", type=int, default=1, help="业务可用最小激活视角数")
+    parser.add_argument("--business-min-active-views", type=int, default=3,
+                        help="业务可用最小激活视角数（默认与 Actor 的 min_active_views=3 对齐）")
     parser.add_argument("--bw-min-mbps", type=float, default=20.0)
     parser.add_argument("--bw-max-mbps", type=float, default=120.0)
     parser.add_argument("--disconnect-prob", type=float, default=0.0, help="jitter_outage 随机断联概率")
@@ -74,8 +76,17 @@ def parse_args():
     parser.add_argument("--strict-bandwidth", action="store_true", help="超带宽直接过滤候选（默认仅软罚）")
     parser.add_argument("--sync-u2", action="store_true", help="u=2 实时同步（默认异步后台入 Q_net）")
     parser.add_argument("--adapter-size-mb", type=float, default=1.2, help="u=1 adapter 下发体积(MB)")
-    parser.add_argument("--u2-update-size-mb", type=float, default=50.0, help="u=2 重训权重体积(MB)")
-    return parser.parse_args()
+    parser.add_argument("--query-size-mb", type=float, default=5.0, help="S_query 长期通信记账量(MB)，不进入默认前台 T_comm")
+    parser.add_argument("--foreground-query-size-mb", type=float, default=0.05, help="前台实时轻量请求体积(MB)，进入 T_comm")
+    parser.add_argument("--include-adapter-in-foreground", action="store_true",
+                        help="将 u=1 的 adapter payload 也计入前台 T_comm；默认仍作为后台异步下发")
+    parser.add_argument("--u2-update-size-mb", type=float, default=None, help="u=2 重训权重体积(MB)")
+    parser.add_argument("--q-net-max-mb", type=float, default=200.0,
+                        help="Q_net 物理积压队列容量上限(MB)，默认 200，可通过该参数覆盖")
+    args = parser.parse_args()
+    if args.u2_update_size_mb is None:
+        args.u2_update_size_mb = args.scl_weights if args.scl_weights is not None else 50.0
+    return args
 
 
 def load_trajectory(path, num_views):
@@ -108,7 +119,7 @@ def int_or_empty(row, key):
 
 def build_log_row(row, t, y_bw, w_t, struct_drift, v_opt, u_opt, k_opt,
                  c_comm, acc, cost, best_g, net_state, e2e_info,
-                 business_available, q_net):
+                 business_available, q_net, queue_result, candidate_scores):
     log_row = {
         "t": t,
         "sample_id": int_or_empty(row, "sample_id"),
@@ -133,12 +144,36 @@ def build_log_row(row, t, y_bw, w_t, struct_drift, v_opt, u_opt, k_opt,
         "effective_bandwidth_mbps": float(net_state.get("effective_bandwidth_mbps", 0.0)),
         "B_t": float(net_state.get("B_t", 0.0)),
         "is_disconnected": int(bool(net_state.get("is_disconnected", False))),
+        "foreground_realtime_comm": float(e2e_info.get("realtime_comm", 0.0)),
         "comm_delay_ms": float(e2e_info.get("comm_delay_ms", 0.0)),
         "e2e_delay_ms": float(e2e_info.get("e2e_delay_ms", 0.0)),
         "deadline_met": int(bool(e2e_info.get("deadline_met", False))),
         "transmission_success": int(bool(e2e_info.get("transmission_success", True))),
         "business_available": int(bool(business_available)),
     }
+
+    # 后台更新链路按时隙落盘；completed_events 的延迟在这里按任务类型汇总，
+    # 以便测试脚本无需重放模拟器状态即可统计完整的队列指标。
+    for key in (
+        "pending_comm", "served_comm", "background_comm", "realtime_comm",
+        "Q_net_max", "Q_net_threshold",
+        "ttl_expired_mb", "cap_drop_mb", "drop_ratio", "adapter_drop_ratio",
+        "adapter_completion_rate", "u2_update_completion_rate",
+    ):
+        log_row[key] = float(queue_result.get(key, 0.0))
+    log_row["completed_event_count"] = int(queue_result.get("completed_event_count", 0))
+    for task_type, prefix in (("adapter", "adapter"), ("scl_weights", "scl")):
+        events = [event for event in queue_result.get("completed_events", [])
+                  if event.get("task_type") == task_type]
+        log_row[f"{prefix}_completed_event_count"] = len(events)
+        for metric in ("task_latency_ms", "queue_latency_ms"):
+            log_row[f"{prefix}_{metric}_sum"] = float(sum(event[metric] for event in events))
+
+    # 高结构漂移诊断：每种 u 记录该槽所有候选中的最高原始/网络惩罚后评分。
+    for u in (0, 1, 2):
+        score = candidate_scores.get(u)
+        log_row[f"G_raw_u{u}"] = "" if score is None else float(score["G_raw"])
+        log_row[f"G_effective_u{u}"] = "" if score is None else float(score["G_effective"])
 
     for i, value in enumerate(w_t, start=1):
         log_row[f"w_{i}"] = float(value)
@@ -172,6 +207,8 @@ def save_decision_log(path, rows, num_views):
         "G",
         "Y_bw",
         "Q_net",
+        "Q_net_max",
+        "Q_net_threshold",
         "active_views",
         "active_token_ratio_sum",
         "network_state",
@@ -179,11 +216,35 @@ def save_decision_log(path, rows, num_views):
         "effective_bandwidth_mbps",
         "B_t",
         "is_disconnected",
+        "foreground_realtime_comm",
         "comm_delay_ms",
         "e2e_delay_ms",
         "deadline_met",
         "transmission_success",
         "business_available",
+        "pending_comm",
+        "served_comm",
+        "background_comm",
+        "realtime_comm",
+        "ttl_expired_mb",
+        "cap_drop_mb",
+        "drop_ratio",
+        "adapter_drop_ratio",
+        "adapter_completion_rate",
+        "u2_update_completion_rate",
+        "completed_event_count",
+        "adapter_completed_event_count",
+        "adapter_task_latency_ms_sum",
+        "adapter_queue_latency_ms_sum",
+        "scl_completed_event_count",
+        "scl_task_latency_ms_sum",
+        "scl_queue_latency_ms_sum",
+        "G_raw_u0",
+        "G_effective_u0",
+        "G_raw_u1",
+        "G_effective_u1",
+        "G_raw_u2",
+        "G_effective_u2",
     ]
 
     with path.open("w", newline="", encoding="utf-8") as f:
@@ -192,7 +253,7 @@ def save_decision_log(path, rows, num_views):
         writer.writerows(rows)
 
 
-def print_summary(log_rows, y_bw):
+def print_summary(log_rows, y_bw, deadline_ms=200.0):
     u_counter = Counter(row["u"] for row in log_rows)
     total = len(log_rows)
     avg_g = np.mean([row["G"] for row in log_rows])
@@ -216,7 +277,7 @@ def print_summary(log_rows, y_bw):
     print(f"平均激活视角数: {avg_active_views:.4f}")
     print(f"平均 Token 保留率总和: {avg_token_sum:.4f}")
     print(f"业务保持率: {business_rate:.2%}  (硬指标 ≥90%)")
-    print(f"端到端时延达标率: {deadline_rate:.2%}  平均={avg_e2e:.1f}ms  P95={p95_e2e:.1f}ms  (≤{200}ms)")
+    print(f"端到端时延达标率: {deadline_rate:.2%}  平均={avg_e2e:.1f}ms  P95={p95_e2e:.1f}ms  (≤{deadline_ms:g}ms)")
     print(f"断联率: {disconnect_rate:.2%}")
     for u in [0, 1, 2]:
         count = u_counter.get(u, 0)
@@ -237,7 +298,7 @@ def main():
         "beta_0": 0.2,
         "S_adapter": args.adapter_size_mb,  # adapter 参数下发带宽消耗 (MB)，u=1 通信开销口径
         "SCL_weights": args.u2_update_size_mb,
-        "S_query": 5.0,
+        "S_query": args.query_size_mb,
         "alpha_env": args.alpha_env,
         "alpha_struct": args.alpha_struct,
         "retrain_bonus": args.retrain_bonus,
@@ -276,9 +337,13 @@ def main():
         acc_floor=args.acc_floor,
         business_min_active_views=args.business_min_active_views,
         adapter_size_mb=args.adapter_size_mb,
+        query_size_mb=args.query_size_mb,
+        foreground_query_size_mb=args.foreground_query_size_mb,
+        include_adapter_in_foreground=args.include_adapter_in_foreground,
         u2_update_size_mb=args.u2_update_size_mb,
         strict_bandwidth=args.strict_bandwidth,
         sync_u2=args.sync_u2,
+        q_net_max_mb=args.q_net_max_mb,
         seed=args.seed,
     )
     y_bw = np.zeros(total_slots)
@@ -288,7 +353,10 @@ def main():
         f"开始真实轨迹调度: V={num_views}, T={total_slots}, "
         f"B_avg={args.b_avg}, V_lya={args.v_lya}, eps_mask={args.eps_mask}, "
         f"min_active_views={args.min_active_views}, "
-        f"S_adapter={args.adapter_size_mb}, SCL_weights={args.u2_update_size_mb}"
+        f"S_adapter={args.adapter_size_mb}, S_query={args.query_size_mb}, "
+        f"S_query_fg={args.foreground_query_size_mb}, SCL_weights={args.u2_update_size_mb}, "
+        f"include_adapter_in_foreground={args.include_adapter_in_foreground}, "
+        f"Q_net_max={args.q_net_max_mb}"
     )
     print(f"网络模式: {args.network_mode}, slot={args.slot_duration}s, "
           f"deadline={args.deadline_ms}ms, strict_bw={args.strict_bandwidth}, sync_u2={args.sync_u2}")
@@ -322,6 +390,7 @@ def main():
         best_g = -np.inf
         best_action = None
         best_details = None
+        candidate_scores = {}
         if not feasible:
             # 极端情况（断联且 Actor 未生成 u=0 候选）兜底：本地自治
             v_fallback = np.zeros(num_views, dtype=int)
@@ -333,9 +402,15 @@ def main():
                 v_cand, u_cand, w_t, e_drift, struct_drift, y_bw[t], args.v_lya, sys_params
             )
             # 超带宽软罚：G_effective = G_raw - overflow_penalty * (comm_overflow / B_t)
-            # realtime_comm 对 u=1/u=2-async 为 0（异步后台），仅 u=2 --sync-u2 时非 0
+            # realtime_comm 计入当前业务必须阻塞等待的前台通信：u=1 为轻量前台请求，u=2 仅 --sync-u2 时为完整同步 payload。
             realtime_comm = net.realtime_comm_mb(u_cand, c_comm)
             g_effective = net.apply_network_penalty(g_raw, realtime_comm)["G_effective"]
+
+            score = candidate_scores.get(int(u_cand))
+            if score is None or g_effective > score["G_effective"]:
+                candidate_scores[int(u_cand)] = {
+                    "G_raw": float(g_raw), "G_effective": float(g_effective)
+                }
 
             if g_effective > best_g:
                 best_g = g_effective
@@ -346,8 +421,12 @@ def main():
         c_comm_opt, acc_opt, cost_opt = best_details
 
         # 4.5 端到端时延（u=0 特判 T_comm=0 不加 RTT；由 compute_e2e 内部处理）
+        # Foreground e2e only counts realtime payload blocking the current slot.
+        # MB-level S_query and async Adapter/SCL traffic remain in Y_bw/Q_net accounting.
+        # u=1 small foreground query/control payload is provided by NetworkSimulator.realtime_comm_mb().
+        e2e_realtime_comm = net.realtime_comm_mb(u_opt, c_comm_opt)
         e2e_info = net.compute_e2e(
-            u_opt, net.realtime_comm_mb(u_opt, c_comm_opt), t_edge=args.edge_delay_ms
+            u_opt, e2e_realtime_comm, t_edge=args.edge_delay_ms
         )
 
         # 4.6 业务可用四条件（防"断联切本地=100%可用"虚高）
@@ -370,7 +449,7 @@ def main():
             build_log_row(
                 row, t, y_bw[t], w_t, struct_drift, v_opt, u_opt, k_opt,
                 c_comm_opt, acc_opt, cost_opt, best_g, net_state, e2e_info,
-                business_available, q_net,
+                business_available, q_net, queue_result, candidate_scores,
             )
         )
 
@@ -383,7 +462,7 @@ def main():
             )
 
     save_decision_log(args.output, decision_log, num_views)
-    print_summary(decision_log, y_bw)
+    print_summary(decision_log, y_bw, args.deadline_ms)
     print(f"决策日志已保存: {args.output}")
 
 

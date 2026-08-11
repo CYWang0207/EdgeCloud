@@ -34,6 +34,7 @@ coverage.xml
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+results/
 
 # Jupyter
 .ipynb_checkpoints
@@ -101,3 +102,4 @@ Desktop.ini
 logs/
 .env
 .env.local
+local/

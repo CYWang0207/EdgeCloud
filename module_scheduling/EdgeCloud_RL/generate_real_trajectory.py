@@ -21,7 +21,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 def find_mv_vit_dir():
     search_roots = [SCRIPT_DIR, *SCRIPT_DIR.parents]
-    candidates = []
+    project_dir = SCRIPT_DIR.parents[1]
+    candidates = [project_dir / "module_edge_perception"]
     for root in search_roots:
         candidates.append(root)
         candidates.append(root / "MV-VIT")

@@ -4,7 +4,7 @@
 
 - Actor-Critic RL：Actor（DNN）生成候选动作，Critic（注水算法）精确评估
 - Lyapunov 带宽队列：长期平均带宽约束优化
-- VLM Oracle：模拟 DeepSeek 场景分析行为
+- 场景专用 Adapter：将已校准的 adapter-only 权重作为 u=1 小更新进行传输模拟
 - 多节点协同：冲突检测 + 云端一致性仲裁
 - 网络韧性：带宽波动 + 断连 fallback
 
@@ -22,7 +22,7 @@
 ```
 module_scheduling/
 ├── EdgeCloud_RL/             # Actor-Critic RL + Lyapunov 主循环（实际代码在此，非 scheduler/ 子目录）
-│   ├── main_edge_cloud_new.py  # 单节点主循环（已接 adapter u=1 口径）
+│   ├── main_edge_cloud_new.py  # 单节点主循环（已接 adapter u=1 口径 + network_sim）
 │   ├── main_edge_cloud.py      # 【已失效】旧版，Critic 调用签名不匹配，勿用
 │   ├── actor_memory.py / critic_water_filling.py
 │   ├── generate_real_trajectory.py / evaluate_rl_policy_on_mvvit.py
@@ -32,13 +32,6 @@ module_scheduling/
 ├── multi_node/                # 【待建】arbiter.py / overlap_manager.py / rollback.py
 ```
 
-## 代码来源
-
-核心代码由学长提供，位于本地 D:\challenge\Code\code2\EdgeCloud_RL\，包括：
-- main_edge_cloud_new.py — RL 调度主循环
-- actor_memory.py — Actor 网络
-- critic_water_filling.py — Critic 注水算法
-- evaluate_rl_policy_on_mvvit.py — RL 策略真实评估
 
 ## 负责人任务
 

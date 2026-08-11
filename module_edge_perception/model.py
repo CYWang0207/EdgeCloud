@@ -88,7 +88,8 @@ class EarlyFusionMultiViewViT(nn.Module):
         missing = self.missing_view_token.expand_as(tokens)
         return torch.where(active, tokens, missing)
 
-    def forward(self, x, view_mask=None, keep_ratios=None, token_score_mode=None, prompt_tokens=None):
+    def forward(self, x, view_mask=None, keep_ratios=None, token_score_mode=None,
+                prompt_tokens=None, return_features=False):
         """
         x: [Batch_size, Views, Channels, Height, Width]
         view_mask: optional [Batch_size, Views], 1 means available, 0 means missing.
@@ -144,6 +145,8 @@ class EarlyFusionMultiViewViT(nn.Module):
         cls_out = x[:, 0]
         out = self.head(cls_out)
 
+        if return_features:
+            return out, cls_out
         return out
 
     def forward_hard_prune(self, x, keep_ratio=1.0, keep_ratios=None,

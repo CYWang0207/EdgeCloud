@@ -1,6 +1,7 @@
 import argparse
 import csv
 import json
+import math
 import sys
 import time
 from collections import Counter
@@ -12,10 +13,13 @@ import numpy as np
 BASELINE_DIR = Path(__file__).resolve().parent
 MV_VIT_DIR = BASELINE_DIR.parent
 FORMAL_DIR = MV_VIT_DIR / "formal_experiments"
+EDGE_CLOUD_RL_DIR = MV_VIT_DIR / "EdgeCloud_RL"
 
-for path in [str(FORMAL_DIR), str(MV_VIT_DIR)]:
+for path in [str(FORMAL_DIR), str(MV_VIT_DIR), str(EDGE_CLOUD_RL_DIR)]:
     if path not in sys.path:
         sys.path.insert(0, path)
+
+from network_sim import DEFAULT_ACC_FLOOR, NetworkSimulator  # noqa: E402
 
 
 def add_common_args(parser):
@@ -40,6 +44,39 @@ def add_common_args(parser):
                         help="adapter 参数下发带宽 (MB)，u=1 通信开销口径")
     parser.add_argument("--s-query", type=float, default=0.1)
     parser.add_argument("--scl-weights", type=float, default=20.0)
+
+    # --- 网络韧性参数（与 main_edge_cloud_new.py 对齐，让基线跑四档出 e2e/业务保持率）---
+    parser.add_argument(
+        "--network-mode",
+        default="static",
+        choices=("static", "jitter", "jitter_outage", "markov", "all"),
+        help="static=基线对照；jitter=带宽抖动；jitter_outage=抖动+断联；markov=GOOD/WEAK/DOWN；all=四档全跑出对比表",
+    )
+    parser.add_argument("--slot-duration", type=float, default=0.2, help="单时隙时长(s)，B_t=R_t*slot/8")
+    parser.add_argument("--edge-delay-ms", type=float, default=80.0, help="T_edge 边缘推理延迟")
+    parser.add_argument("--rtt-ms", type=float, default=10.0, help="往返时延，T_comm 计入")
+    parser.add_argument("--deadline-ms", type=float, default=200.0, help="端到端时延硬指标上限(≤0.2s)")
+    parser.add_argument(
+        "--acc-floor",
+        type=float,
+        default=DEFAULT_ACC_FLOOR,
+        help=f"业务可用 proxy_acc 下限，默认 {DEFAULT_ACC_FLOOR}（与主方法共享）",
+    )
+    parser.add_argument("--business-min-active-views", type=int, default=1, help="业务可用最小激活视角数")
+    parser.add_argument("--bw-min-mbps", type=float, default=20.0)
+    parser.add_argument("--bw-max-mbps", type=float, default=120.0)
+    parser.add_argument("--disconnect-prob", type=float, default=0.0, help="jitter_outage 随机断联概率")
+    parser.add_argument("--outage-period", type=int, default=0, help="周期断联周期(时隙)，0=不周期断联")
+    parser.add_argument("--outage-duration", type=int, default=0, help="周期断联持续(时隙)")
+    parser.add_argument("--strict-bandwidth", action="store_true", help="超带宽直接过滤候选（默认仅软罚）")
+    parser.add_argument("--sync-u2", action="store_true", help="u=2 实时同步（默认异步后台入 Q_net）")
+    parser.add_argument(
+        "--force-local",
+        action="store_true",
+        help="启用'断联→强制 u=0'保护（这是主方法 filter_candidates 的网络感知能力，基线默认不具备）。"
+        "默认关闭：基线在断联时仍按自身 u 决策（u=1/2 会触发 decision_success=False），"
+        "业务保持率在 jitter_outage/markov 下显著下降，体现基线网络无感的弱点。加此旗标可做消融对照。",
+    )
     return parser
 
 
@@ -95,6 +132,36 @@ def make_sys_params(args):
         "retrain_bonus": args.retrain_bonus,
         "tau_retrain": args.tau_retrain,
     }
+
+
+def build_network_simulator(args, mode, sys_params):
+    """按 args 构造 NetworkSimulator，通信体积口径与 baseline 自身 comm_cost 一致。
+
+    baseline 的 comm_cost(u) 用 S_adapter/S_query/SCL_weights；这里把同一组值喂给
+    NetworkSimulator 的 adapter_size_mb/query_size_mb/u2_update_size_mb，确保
+    decision_fn 算的 c_comm 与 network_sim 内部 comm_cost_mb 同口径。
+    """
+    return NetworkSimulator(
+        mode=mode,
+        slot_duration=args.slot_duration,
+        b_avg=args.b_avg,
+        bandwidth_min_mbps=args.bw_min_mbps,
+        bandwidth_max_mbps=args.bw_max_mbps,
+        disconnect_prob=args.disconnect_prob,
+        outage_period=args.outage_period,
+        outage_duration=args.outage_duration,
+        rtt_ms=args.rtt_ms,
+        edge_delay_ms=args.edge_delay_ms,
+        deadline_ms=args.deadline_ms,
+        acc_floor=args.acc_floor,
+        business_min_active_views=args.business_min_active_views,
+        adapter_size_mb=args.s_adapter,
+        query_size_mb=args.s_query,
+        u2_update_size_mb=args.scl_weights,
+        strict_bandwidth=args.strict_bandwidth,
+        sync_u2=args.sync_u2,
+        seed=args.seed,
+    )
 
 
 def comm_cost(u_t, sys_params):
@@ -282,7 +349,23 @@ def make_action(v_t, u_t, k_t, w_real, w_decision, e_drift, struct_drift, y_bw, 
     }
 
 
-def build_log_row(row, t, y_bw, w_real, w_decision, action, method, struct_drift, tokens_per_view):
+def build_log_row(
+    row,
+    t,
+    y_bw,
+    w_real,
+    w_decision,
+    action,
+    method,
+    struct_drift,
+    tokens_per_view,
+    net_state=None,
+    e2e_info=None,
+    business_available=None,
+    q_net=None,
+    forced_local=False,
+    decision_success=None,
+):
     num_views = len(w_real)
     log_row = {
         "method": method,
@@ -308,6 +391,36 @@ def build_log_row(row, t, y_bw, w_real, w_decision, action, method, struct_drift
         "token_count": float(np.sum(action["k"]) * tokens_per_view),
         "decision_time_ms": float(action.get("decision_time_ms", 0.0)),
     }
+    # 网络韧性字段（接 network_sim 后填充；旧调用方不传则留空，保持向后兼容）
+    if net_state is not None:
+        log_row["network_state"] = net_state.get("network_state", "")
+        log_row["bandwidth_mbps"] = float(net_state.get("bandwidth_mbps", 0.0))
+        log_row["loss_rate"] = float(net_state.get("loss_rate", 0.0))
+        log_row["B_t"] = float(net_state.get("B_t", 0.0))
+        log_row["is_disconnected"] = int(bool(net_state.get("is_disconnected", False)))
+    else:
+        log_row["network_state"] = ""
+        log_row["bandwidth_mbps"] = ""
+        log_row["loss_rate"] = ""
+        log_row["B_t"] = ""
+        log_row["is_disconnected"] = ""
+    if e2e_info is not None:
+        log_row["realtime_comm"] = float(e2e_info.get("realtime_comm", 0.0))
+        log_row["comm_delay_ms"] = float(e2e_info.get("comm_delay_ms", 0.0))
+        log_row["cloud_delay_ms"] = float(e2e_info.get("cloud_delay_ms", 0.0))
+        log_row["e2e_delay_ms"] = float(e2e_info.get("e2e_delay_ms", 0.0))
+        log_row["deadline_ms"] = float(e2e_info.get("deadline_ms", 0.0))
+        log_row["deadline_met"] = int(bool(e2e_info.get("deadline_met", False)))
+        log_row["transmission_success"] = int(bool(e2e_info.get("transmission_success", False)))
+    else:
+        for key in ["realtime_comm", "comm_delay_ms", "cloud_delay_ms", "e2e_delay_ms", "deadline_ms"]:
+            log_row[key] = ""
+        log_row["deadline_met"] = ""
+        log_row["transmission_success"] = ""
+    log_row["decision_success"] = "" if decision_success is None else int(bool(decision_success))
+    log_row["forced_local"] = int(bool(forced_local))
+    log_row["Q_net"] = "" if q_net is None else float(q_net)
+    log_row["business_available"] = "" if business_available is None else int(bool(business_available))
     for key in ["stage_id", "stage_name"]:
         if key in row:
             log_row[key] = row.get(key, "")
@@ -349,6 +462,22 @@ def write_decision_log(path, rows, num_views):
         "active_token_ratio_sum",
         "token_count",
         "decision_time_ms",
+        "network_state",
+        "bandwidth_mbps",
+        "loss_rate",
+        "B_t",
+        "is_disconnected",
+        "realtime_comm",
+        "comm_delay_ms",
+        "cloud_delay_ms",
+        "e2e_delay_ms",
+        "deadline_ms",
+        "deadline_met",
+        "transmission_success",
+        "decision_success",
+        "forced_local",
+        "Q_net",
+        "business_available",
     ]
     extra_fields = []
     for key in ["stage_id", "stage_name"]:
@@ -364,6 +493,31 @@ def write_decision_log(path, rows, num_views):
 def summarize_log(rows, final_y):
     u_counter = Counter(int(row["u"]) for row in rows)
     total = max(len(rows), 1)
+
+    def _num(row, key):
+        val = row.get(key, "")
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    def _mean(key):
+        vals = [v for v in (_num(r, key) for r in rows) if v is not None]
+        return float(np.mean(vals)) if vals else float("nan")
+
+    def _p95(key):
+        vals = [v for v in (_num(r, key) for r in rows) if v is not None]
+        return float(np.percentile(vals, 95)) if vals else float("nan")
+
+    def _rate(key):
+        vals = []
+        for r in rows:
+            v = r.get(key, "")
+            if v == "" or v is None:
+                continue
+            vals.append(int(bool(v)))
+        return float(np.mean(vals)) if vals else float("nan")
+
     summary = {
         "total_slots": len(rows),
         "avg_U": float(np.mean([row["U"] for row in rows])),
@@ -377,6 +531,17 @@ def summarize_log(rows, final_y):
         "avg_token_sum": float(np.mean([row["active_token_ratio_sum"] for row in rows])),
         "avg_token_count": float(np.mean([row["token_count"] for row in rows])),
         "avg_decision_time_ms": float(np.mean([row.get("decision_time_ms", 0.0) for row in rows])),
+        # 网络韧性指标（接 network_sim 后新增；旧日志无对应列则记 NaN）
+        "business_continuity_rate": _rate("business_available"),
+        "avg_e2e_delay_ms": _mean("e2e_delay_ms"),
+        "p95_e2e_delay_ms": _p95("e2e_delay_ms"),
+        "deadline_met_rate": _rate("deadline_met"),
+        "transmission_success_rate": _rate("transmission_success"),
+        "decision_success_rate": _rate("decision_success"),
+        "disconnect_rate": _rate("is_disconnected"),
+        "forced_local_count": int(sum(int(bool(r.get("forced_local", 0))) for r in rows)),
+        "avg_Q_net": _mean("Q_net"),
+        "avg_bandwidth_mbps": _mean("bandwidth_mbps"),
     }
     for u_t in [0, 1, 2]:
         summary[f"u{u_t}_count"] = int(u_counter.get(u_t, 0))
@@ -391,17 +556,38 @@ def write_summary(path, summary):
         json.dump(summary, f, indent=2, ensure_ascii=False)
 
 
-def simulate_baseline(rows, num_views, method, args, decision_fn):
+def simulate_baseline(rows, num_views, method, args, decision_fn, network_mode=None):
+    """跑一遍基线调度。接 NetworkSimulator 后每时隙：
+    step → decision_fn → (断联强制 u=0) → compute_e2e → is_business_available → update_queues。
+
+    network_mode 可覆盖 args.network_mode（供 --network-mode all 四档循环复用）。
+    """
     rng = np.random.default_rng(args.seed)
     sys_params = make_sys_params(args)
-    y_bw = np.zeros(len(rows), dtype=float)
+    mode = network_mode or getattr(args, "network_mode", "static")
+    net = build_network_simulator(args, mode=mode, sys_params=sys_params)
+    force_local_enabled = bool(getattr(args, "force_local", False))
+
     decision_log = []
     state = {"rng": rng, "cache": set(), "history": Counter()}
 
     for t, row in enumerate(rows):
+        # 1. 采样网络状态（R_t, B_t, net_state, is_disconnected）
+        net_state = net.step()
+        is_disc = bool(net_state["is_disconnected"])
+
         e_drift = float(row["E_drift"])
         struct_drift = row_struct_drift(row)
         w_real = row_weights(row, num_views)
+
+        # 时隙开始 Y_bw（net.step 不改 Y_bw，net.update_queues 才改）
+        y_bw_t = float(net.y_bw)
+
+        # 把网络状态暴露给 decision_fn（基线可选用，多数基线网络无感、忽略即可）
+        state["net_state"] = net_state
+        state["is_disconnected"] = is_disc
+
+        # 2. 基线自身决策（v_t, u_t, k_t）
         start_time = time.perf_counter()
         action = decision_fn(
             t=t,
@@ -409,7 +595,7 @@ def simulate_baseline(rows, num_views, method, args, decision_fn):
             w_real=w_real,
             e_drift=e_drift,
             struct_drift=struct_drift,
-            y_bw=float(y_bw[t]),
+            y_bw=y_bw_t,
             num_views=num_views,
             args=args,
             sys_params=sys_params,
@@ -417,29 +603,137 @@ def simulate_baseline(rows, num_views, method, args, decision_fn):
         )
         action["decision_time_ms"] = (time.perf_counter() - start_time) * 1000.0
 
-        if t < len(rows) - 1:
-            y_bw[t + 1] = max(y_bw[t] + action["c_comm"] - args.b_avg, 0.0)
+        # 3. 断联→强制 u=0（系统级保护，对齐 main_edge_cloud_new.filter_candidates）
+        forced_local = False
+        if is_disc and int(action["u"]) != 0 and force_local_enabled:
+            v_t = action["v"]
+            k_t = action["k"]
+            w_decision = action.get("w_decision", w_real)
+            action = make_action(
+                v_t,
+                0,
+                k_t,
+                w_real,
+                w_decision,
+                e_drift,
+                struct_drift,
+                y_bw_t,
+                args,
+                sys_params,
+            )
+            action["w_decision"] = w_decision
+            action["decision_time_ms"] = (time.perf_counter() - start_time) * 1000.0
+            forced_local = True
+
+        u_final = int(action["u"])
+        c_comm = float(action["c_comm"])
+        realtime_comm = net.realtime_comm_mb(u_final, c_comm)
+
+        # 4. 端到端时延（u=0/异步 u=1,u=2 → realtime_comm=0 → T_comm=0）
+        e2e_info = net.compute_e2e(u_final, realtime_comm, t_edge=args.edge_delay_ms)
+
+        # 5. 业务可用四条件
+        decision_success = (u_final == 0) or (not is_disc)
+        business_available = net.is_business_available(
+            decision_success=decision_success,
+            e2e_ms=e2e_info["e2e_delay_ms"],
+            active_views=int(np.sum(action["v"])),
+            proxy_acc=float(action["proxy_acc"]),
+            transmission_success=e2e_info["transmission_success"],
+        )
+
+        # 6. 更新 Y_bw（Lyapunov 虚拟队列）+ Q_net（物理积压）
+        queue_result = net.update_queues(c_comm=c_comm, b_avg=args.b_avg, u=u_final)
+        q_net = queue_result["Q_net"]
 
         decision_log.append(
             build_log_row(
                 row,
                 t,
-                float(y_bw[t]),
+                y_bw_t,
                 w_real,
                 action.get("w_decision", w_real),
                 action,
                 method,
                 struct_drift,
                 args.tokens_per_view,
+                net_state=net_state,
+                e2e_info=e2e_info,
+                business_available=business_available,
+                q_net=q_net,
+                forced_local=forced_local,
+                decision_success=decision_success,
             )
         )
 
-    summary = summarize_log(decision_log, y_bw[-1] if len(y_bw) else 0.0)
+    summary = summarize_log(decision_log, net.y_bw)
     summary["method"] = method
     summary["num_views"] = num_views
     summary["b_avg"] = args.b_avg
     summary["v_lya"] = args.v_lya
+    summary["network_mode"] = mode
     return decision_log, summary
+
+
+NETWORK_MODES = ("static", "jitter", "jitter_outage", "markov")
+
+
+def _print_summary_block(method, summary, num_views, output, summary_output):
+    print("-" * 72)
+    print(f"{method} baseline finished: slots={summary['total_slots']}")
+    print(f"Decision log: {output}")
+    print(f"Summary: {summary_output}")
+    print(f"avg_proxy_acc={summary['avg_proxy_acc']:.6f}")
+    print(f"avg_comm={summary['avg_comm']:.4f} MB/slot, avg_queue={summary['avg_queue']:.4f}")
+    print(f"avg_active_views={summary['avg_active_views']:.4f}/{num_views}")
+    print(f"avg_token_count={summary['avg_token_count']:.2f}")
+    print(f"avg_decision_time_ms={summary['avg_decision_time_ms']:.6f}")
+    biz = summary.get("business_continuity_rate", float("nan"))
+    e2e = summary.get("avg_e2e_delay_ms", float("nan"))
+    p95 = summary.get("p95_e2e_delay_ms", float("nan"))
+    print(
+        f"business_continuity={biz:.2%}, avg_e2e={e2e:.1f}ms, p95_e2e={p95:.1f}ms, "
+        f"disconnect={summary.get('disconnect_rate', float('nan')):.2%}"
+    )
+    print(
+        "u ratio: "
+        f"u0={summary['u0_ratio']:.2%}, "
+        f"u1={summary['u1_ratio']:.2%}, "
+        f"u2={summary['u2_ratio']:.2%}"
+    )
+
+
+def _fmt(v, spec=".4f"):
+    """格式化数值，NaN/None → 'N/A'。"""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "N/A"
+    if math.isnan(f):
+        return "N/A"
+    return format(f, spec)
+
+
+def _print_comparison_table(method, modes_summary):
+    """打印 method 在四档网络下的对比表（业务保持率/e2e/通信/token）。"""
+    print("=" * 78)
+    print(f"[{method}] 四档网络对比表")
+    print("-" * 78)
+    header = f"{'mode':<14}{'业务保持率':>12}{'avg_e2e(ms)':>14}{'p95_e2e(ms)':>14}{'通信(MB/slot)':>16}{'token_count':>14}"
+    print(header)
+    print("-" * 78)
+    for mode in NETWORK_MODES:
+        s = modes_summary.get(mode, {})
+        row = (
+            f"{mode:<14}"
+            f"{_fmt(s.get('business_continuity_rate'), '.2%'):>12}"
+            f"{_fmt(s.get('avg_e2e_delay_ms'), '.1f'):>14}"
+            f"{_fmt(s.get('p95_e2e_delay_ms'), '.1f'):>14}"
+            f"{_fmt(s.get('avg_comm'), '.4f'):>16}"
+            f"{_fmt(s.get('avg_token_count'), '.1f'):>14}"
+        )
+        print(row)
+    print("=" * 78)
 
 
 def run_baseline(method, decision_fn, extra_args_fn=None):
@@ -451,25 +745,57 @@ def run_baseline(method, decision_fn, extra_args_fn=None):
 
     rows, num_views = load_trajectory(args.input, args.num_views)
     args.num_views = num_views
-    decision_log, summary = simulate_baseline(rows, num_views, method, args, decision_fn)
 
     output = Path(args.output)
-    summary_output = Path(args.summary_output) if args.summary_output else output.with_suffix(".summary.json")
-    write_decision_log(output, decision_log, num_views)
-    write_summary(summary_output, summary)
-
-    print("-" * 72)
-    print(f"{method} baseline finished: slots={summary['total_slots']}")
-    print(f"Decision log: {output}")
-    print(f"Summary: {summary_output}")
-    print(f"avg_proxy_acc={summary['avg_proxy_acc']:.6f}")
-    print(f"avg_comm={summary['avg_comm']:.4f} MB/slot, avg_queue={summary['avg_queue']:.4f}")
-    print(f"avg_active_views={summary['avg_active_views']:.4f}/{num_views}")
-    print(f"avg_token_count={summary['avg_token_count']:.2f}")
-    print(f"avg_decision_time_ms={summary['avg_decision_time_ms']:.6f}")
-    print(
-        "u ratio: "
-        f"u0={summary['u0_ratio']:.2%}, "
-        f"u1={summary['u1_ratio']:.2%}, "
-        f"u2={summary['u2_ratio']:.2%}"
+    summary_output = (
+        Path(args.summary_output) if args.summary_output else output.with_suffix(".summary.json")
     )
+
+    if args.network_mode != "all":
+        decision_log, summary = simulate_baseline(rows, num_views, method, args, decision_fn)
+        write_decision_log(output, decision_log, num_views)
+        write_summary(summary_output, summary)
+        _print_summary_block(method, summary, num_views, output, summary_output)
+        return
+
+    # --- --network-mode all：四档循环 + 汇总对比表 ---
+    modes_summary = {}
+    for mode in NETWORK_MODES:
+        decision_log, summary = simulate_baseline(
+            rows, num_views, method, args, decision_fn, network_mode=mode
+        )
+        modes_summary[mode] = summary
+
+        mode_output = output.with_name(f"{output.stem}_{mode}{output.suffix}")
+        mode_summary = summary_output.with_name(f"{summary_output.stem}_{mode}{summary_output.suffix}")
+        write_decision_log(mode_output, decision_log, num_views)
+        write_summary(mode_summary, summary)
+        print(f"[{mode}] ", end="")
+        _print_summary_block(method, summary, num_views, mode_output, mode_summary)
+
+    combined = {
+        "method": method,
+        "num_views": num_views,
+        "b_avg": args.b_avg,
+        "v_lya": args.v_lya,
+        "modes": modes_summary,
+        "comparison_table": [
+            {
+                "mode": mode,
+                "business_continuity_rate": modes_summary[mode].get("business_continuity_rate"),
+                "avg_e2e_delay_ms": modes_summary[mode].get("avg_e2e_delay_ms"),
+                "p95_e2e_delay_ms": modes_summary[mode].get("p95_e2e_delay_ms"),
+                "avg_comm": modes_summary[mode].get("avg_comm"),
+                "avg_token_count": modes_summary[mode].get("avg_token_count"),
+                "avg_queue": modes_summary[mode].get("avg_queue"),
+                "avg_decision_time_ms": modes_summary[mode].get("avg_decision_time_ms"),
+                "u0_ratio": modes_summary[mode].get("u0_ratio"),
+                "u1_ratio": modes_summary[mode].get("u1_ratio"),
+                "u2_ratio": modes_summary[mode].get("u2_ratio"),
+            }
+            for mode in NETWORK_MODES
+        ],
+    }
+    write_summary(summary_output, combined)
+    print(f"\nCombined summary: {summary_output}")
+    _print_comparison_table(method, modes_summary)

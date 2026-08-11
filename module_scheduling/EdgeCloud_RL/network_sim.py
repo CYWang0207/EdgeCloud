@@ -91,16 +91,18 @@ class NetworkSimulator:
         down_loss_rate: float = 1.0,
         rtt_ms: float = 10.0,
         edge_delay_ms: float = 80.0,
-        prompt_cloud_delay_ms: float = 30.0,
+        adapter_cloud_delay_ms: float = 30.0,
         retrain_cloud_delay_ms: float = 0.0,
         adapter_size_mb: float = 1.2,
         query_size_mb: float = 5.0,
+        foreground_query_size_mb: float = 0.0,
+        include_adapter_in_foreground: bool = False,
         u2_update_size_mb: float = 50.0,
         scl_weights_mb: Optional[float] = None,
         scl_weights: Optional[float] = None,
         deadline_ms: float = 200.0,
         acc_floor: float = DEFAULT_ACC_FLOOR,
-        business_min_active_views: int = 1,
+        business_min_active_views: int = 3,
         overflow_penalty: float = 5.0,
         strict_bandwidth: bool = False,
         sync_u2: bool = False,
@@ -138,10 +140,12 @@ class NetworkSimulator:
         self.down_loss_rate = float(down_loss_rate)
         self.rtt_ms = float(rtt_ms)
         self.edge_delay_ms = float(edge_delay_ms)
-        self.prompt_cloud_delay_ms = float(prompt_cloud_delay_ms)
+        self.adapter_cloud_delay_ms = float(adapter_cloud_delay_ms)
         self.retrain_cloud_delay_ms = float(retrain_cloud_delay_ms)
         self.adapter_size_mb = float(adapter_size_mb)
         self.query_size_mb = float(query_size_mb)
+        self.foreground_query_size_mb = float(foreground_query_size_mb)
+        self.include_adapter_in_foreground = bool(include_adapter_in_foreground)
         if scl_weights_mb is not None:
             u2_update_size_mb = scl_weights_mb
         if scl_weights is not None:
@@ -512,6 +516,7 @@ class NetworkSimulator:
             "dropped_comm": float(self.dropped_comm),
             "drop_ratio": self.drop_ratio(),
             "adapter_drop_ratio": self.drop_ratio("adapter"),
+            "adapter_completion_rate": self.completion_rate("adapter"),
             "u2_update_completion_rate": self.completion_rate("scl_weights"),
             "scl_weights_completion_rate": self.completion_rate("scl_weights"),
             "ttl_expired_count": int(ttl_drop_count),
@@ -541,20 +546,25 @@ class NetworkSimulator:
         )
 
     def realtime_comm_mb(self, u: Optional[int], c_comm: float) -> float:
+        realtime_comm = 0.0
+        if u == 1:
+            realtime_comm += self.foreground_query_size_mb
+            if self.include_adapter_in_foreground:
+                realtime_comm += self.adapter_size_mb
         if u == 2 and self.sync_u2:
-            return float(c_comm)
-        return 0.0
+            realtime_comm += float(c_comm)
+        return float(realtime_comm)
 
     def background_comm_mb(self, u: Optional[int], c_comm: float) -> float:
         if u == 1:
-            return self.adapter_size_mb
+            return 0.0 if self.include_adapter_in_foreground else self.adapter_size_mb
         if u == 2 and not self.sync_u2:
             return self.u2_update_size_mb
         return 0.0
 
     def background_ready_delay_slots(self, u: Optional[int]) -> int:
         if u == 1:
-            delay_ms = self.prompt_cloud_delay_ms
+            delay_ms = self.adapter_cloud_delay_ms
         elif u == 2 and not self.sync_u2:
             delay_ms = self.retrain_cloud_delay_ms
         else:
@@ -563,7 +573,7 @@ class NetworkSimulator:
         return int(math.ceil(max(delay_ms, 0.0) / slot_ms))
 
     def background_task_type(self, u: Optional[int]) -> str:
-        if u == 1:
+        if u == 1 and not self.include_adapter_in_foreground:
             return "adapter"
         if u == 2 and not self.sync_u2:
             return "scl_weights"

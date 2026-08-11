@@ -1,9 +1,8 @@
 # EdgeCloud · 面向端边云协同推理的分布式感知与全局优化决策系统
 
 > 2026"揭榜挂帅"擂台赛 · 赛题 XH-202606  
-> **核心思路**：云端国产大模型（DeepSeek/VLM）充当"知识预言机"，将场景知识**蒸馏压缩进轻量 AdaptFormer 适配器**下发到边缘 ViT 旁路；边缘 MV-ViT 主干冻结 + adapter 可训练，负责实时多视角推理；调度层通过 Actor-Critic + Lyapunov 优化在线决策。  
-> **压缩的不是参数，是云端大模型蒸馏出来的场景知识；传输的不是模型，是压缩后的小适配器。**  
-> 2026-08-03 团队拍板采用 Adapter 方案；prompt 注入降为可选辅助。
+> **核心思路**：云端大 ViT 先在离线标注集上训练场景分类头，再对代表性漂移样本生成教师输出；边缘侧在不使用这些样本真实标签的条件下蒸馏轻量 AdaptFormer Adapter。边缘 MV-ViT 主干冻结，仅加载场景专用 Adapter，调度层通过 Actor-Critic + Lyapunov 优化在线决策。
+> **下发的是 Adapter-only 参数包，不是大 ViT 或整套边缘模型。** 当前正式流程已覆盖 BoxCars116k 与 ModelNet40，并将任务头训练、无标签刷新、开发集选型和官方测试集终评隔离。
 
 ## 团队成员
 
@@ -24,7 +23,8 @@ EdgeCloud/
 ├── module_edge_perception/         # 模块一：边缘实时感知
 │   ├── model.py                     #   EarlyFusionMultiViewViT（多视角早期融合 + token剪枝 + 视角掩码）
 │   ├── adaptformer.py              #   AdaptFormer PEFT 模块（已落地，8/3 验收通过）
-│   ├── train_adapter.py             #   Adapter 蒸馏训练（云端软标签→只训 adapter）
+│   ├── train_boxcars_cloud_teacher_adapter.py # BoxCars 云教师无标签刷新
+│   ├── modelnet_cloud_teacher_refresh.py # ModelNet40 完整云教师流程
 │   ├── verify_adaptformer.py        #   AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
 │   ├── boxcars_dataset.py           #   场景二 BoxCars116k 数据加载
 │   ├── dataset.py / drift_dataset.py
@@ -49,9 +49,9 @@ EdgeCloud/
 
 ```
          +---------- 云端 Cloud ----------+
-         | DeepSeek / VLM "知识预言机"     |   ← 冻结，不训练
-         | · 分析关键帧 -> 判断环境状态     |
-         | · 蒸馏监督 AdaptFormer adapter  |
+         | 场景校准与 Adapter 训练          |
+         | · 扫描 baseline 对退化的敏感性   |
+         | · clean/corrupt 成对训练 adapter |
          | · 多节点冲突仲裁                |
          +---+--------------------+------+
    上行关键帧 |                    | 下行 adapter 参数（几百KB~MB）/ 重训权重
@@ -76,7 +76,7 @@ EdgeCloud/
 
 ## 方案亮点
 
-1. **知识压缩替代参数压缩**：DeepSeek/VLM 在云端分析场景、产软标签，把知识蒸馏压缩进 AdaptFormer adapter（几百KB~MB）下发边缘，而非把 175B 模型蒸馏到 10M
+1. **场景专用小更新**：每个场景只下发其校准、训练后的 AdaptFormer adapter（约 1.2–1.3MB）；冻结的 22M 参数 MV-ViT 主干不传输、不覆盖
 2. **多粒度资源调度**：每时隙联合决策视角选择、Token 剪枝率、协同模式，KKT 注水闭式解保证 ms 级决策
 3. **理论保证**：Lyapunov 强稳定性证明、O(1/V) 效用逼近界、KKT 最优性条件
 4. **多源异构**：四路摄像头天然异构（光照/遮挡/视角各异），MV-ViT 早期融合统一处理
