@@ -192,7 +192,7 @@ EdgeCloud/
 | adapter 下发体积 | 299,916 参 / 1,216,745 bytes ≈ 1.2MB（不含 backbone/norm/head/projector） | ✅ |
 | 业务保持率（四档） | 见网络文档第二次测试结果（PR#31 已合） | ⚠️ e2e 口径见下 |
 | 端到端时延 | 80ms（T_edge 写死，u=1/u=2 异步 realtime_comm=0，**主实验未含通信**） | ⚠️ 待含通信 |
-| 冲突率/解决率 | arbiter 模拟达标，真 multi_node 待跑 | ⚠️ 待真数 |
+| 冲突率/解决率 | **冲突率 4.06% ≤5% / 解决率 100% ≥90%**（2026-08-11 真 multi_node 全量 test 12,322×4，见 docs/多节点冲突仲裁测试结果_20260811.md） | ✅ 真数 |
 | ≥2 类场景 | ModelNet40 + BoxCars116k | ✅ |
 
 ---
