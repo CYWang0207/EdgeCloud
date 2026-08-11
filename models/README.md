@@ -9,11 +9,12 @@
 
 ```
 models/
-├── README.md
+├── README.md                                              # 本文件（唯一进 Git 的文件）
+├── mvvit_base/                                            # MV-ViT 基座权重（网盘下载）
 ├── boxcars_cloud_teacher_adapter_20260809/
-│   └── cloud_unlabeled/best.pth
+│   └── cloud_unlabeled/best.pth                           # BoxCars 正式下发 adapter（约 1.2MB）
 └── modelnet40_cloud_teacher_adapter_20260809/
-    └── cloud_unlabeled/best.pth
+    └── cloud_unlabeled/best.pth                           # ModelNet40 正式下发 adapter（约 1.2MB）
 ```
 
 因此当前恰好只有两个正式模型文件，每个数据集一个。云端 task head 属于实验 artifact，

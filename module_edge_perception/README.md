@@ -62,7 +62,7 @@ module_edge_perception/
 刷新阶段只使用教师 logits/feature、干净回放约束和边缘输出。开发集负责选择固定 checkpoint，官方 test
 只用于最终一次评测。具体协议与命令见：
 
-- `../docs/云端视觉教师Adapter方案_20260809.md`
+- `../docs/实验结果总览_20260809.md`
 - `../docs/第一场景_ModelNet40.md`
 
 下列直接使用 clean/corrupt 标签的训练命令保留为监督基线，不再代表正式提交方法。

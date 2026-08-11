@@ -99,7 +99,14 @@ def parse_args():
         "--adapter-checkpoint",
         type=Path,
         default=None,
-        help="AdaptFormer adapter weights (u=1 口径，adapter 参数同步)。提供后 u=1 走 adapter，prompt 回退为仅 base 可选。",
+        help="云端新下发 adapter 权重（u=1 adapter 同步）。提供后 u=1 走 adapter，prompt 回退为仅 base 可选。",
+    )
+    parser.add_argument(
+        "--adapter-checkpoint-before",
+        type=Path,
+        default=None,
+        help="本地旧 adapter 权重（u=0 本地自治，cloud-teacher 口径）。提供后 u=0 走旧 adapter；"
+             "缺省则 u=0 走无 adapter 的 base（等价于零初始化 adapter：输出=原主干）。",
     )
     parser.add_argument(
         "--adapter-r",
@@ -331,21 +338,44 @@ def load_retrain_model(args, device):
     return retrain_model
 
 
-def load_adapter_model(args, baseline_checkpoint, device):
-    """u=1 边侧模型：基线主干 + adapter（加载云端下发权重）。
+def load_adapter_models(args, baseline_checkpoint, device):
+    """加载 u=0（本地旧 adapter）与 u=1（云端新 adapter）两套边侧模型。
 
-    当前只有一份 adapter 权重（云端新下发），故 u=0 走 base（无有效 adapter，
-    等价于零初始化 adapter：输出=原主干）。将来要表现"本地旧 adapter vs 云端新
-    adapter"时，把 base 模型也 attach 并加载旧权重即可。
+    cloud-teacher 口径：
+      - before_model（u=0 本地自治）：baseline 主干 + --adapter-checkpoint-before 旧 adapter
+      - current_model（u=1 adapter 同步）：baseline 主干 + --adapter-checkpoint 云端新 adapter
+    未提供 before 时 u=0 走 base（无有效 adapter，等价于零初始化 adapter：输出=原主干）。
+    两套模型都基于同一 baseline 主干独立实例化，互不污染。
     """
+    before_model = None
+    if args.adapter_checkpoint_before is not None:
+        if not args.adapter_checkpoint_before.exists():
+            raise FileNotFoundError(
+                f"本地旧 adapter checkpoint not found: {args.adapter_checkpoint_before}"
+            )
+        before_model = load_model(args, baseline_checkpoint, device)
+        attach_adaptformer(before_model, r=args.adapter_r)
+        missing, unexpected = load_adapter_checkpoint(
+            before_model, args.adapter_checkpoint_before, device
+        )
+        print(f"本地旧 adapter（u=0 本地自治）加载: "
+              f"missing={len(missing)}, unexpected={len(unexpected)}")
+        before_model.eval()
+
+    current_model = None
     if args.adapter_checkpoint is None:
-        return None
-    model = load_model(args, baseline_checkpoint, device)
-    attach_adaptformer(model, r=args.adapter_r)
-    missing, unexpected = load_adapter_checkpoint(model, args.adapter_checkpoint, device)
-    print(f"adapter 权重加载: missing={len(missing)}, unexpected={len(unexpected)}")
-    model.eval()
-    return model
+        return before_model, None
+    if not args.adapter_checkpoint.exists():
+        raise FileNotFoundError(f"adapter checkpoint not found: {args.adapter_checkpoint}")
+    current_model = load_model(args, baseline_checkpoint, device)
+    attach_adaptformer(current_model, r=args.adapter_r)
+    missing, unexpected = load_adapter_checkpoint(
+        current_model, args.adapter_checkpoint, device
+    )
+    print(f"云端新 adapter（u=1 adapter 同步）加载: "
+          f"missing={len(missing)}, unexpected={len(unexpected)}")
+    current_model.eval()
+    return before_model, current_model
 
 
 def should_use_prompt(u_values, args):
@@ -357,7 +387,7 @@ def should_use_prompt(u_values, args):
 
 
 def should_use_adapter(u_values, args):
-    """u=1 口径：adapter 参数同步生效的时隙（默认 u==1）。"""
+    """u=1 口径：云端新 adapter 参数同步生效的时隙（默认 u==1）。"""
     if args.adapter_for_u == "none" or args.adapter_checkpoint is None:
         return torch.zeros_like(u_values, dtype=torch.bool)
     if args.adapter_for_u == "u1":
@@ -504,6 +534,7 @@ def write_rows(path, rows, num_views):
         "struct_drift",
         "u",
         "used_prompt",
+        "used_before_adapter",
         "used_retrain",
         "active_views",
         "effective_token_ratio_sum",
@@ -532,7 +563,8 @@ def run_policy_forward(model, images, view_masks, effective_ratios, args, prompt
 
 
 @torch.no_grad()
-def evaluate(model, retrain_model, adapter_model, prompt_gen, loader, policy, args, device):
+def evaluate(model, retrain_model, adapter_model, before_model, prompt_gen,
+             loader, policy, args, device):
     total = 0
     baseline_correct = 0
     policy_correct = 0
@@ -575,15 +607,20 @@ def evaluate(model, retrain_model, adapter_model, prompt_gen, loader, policy, ar
         use_prompt = should_use_prompt(u_values, args)
         use_adapter = should_use_adapter(u_values, args)
         use_retrain = (u_values == 2) & (retrain_model is not None)
+        # u=0 本地自治：before 提供时用本地旧 adapter，否则回退 base（无 adapter）
+        use_before = (u_values == 0) if before_model is not None \
+            else torch.zeros_like(u_values, dtype=torch.bool)
         policy_logits = torch.empty_like(baseline_logits)
+        filled_mask = torch.zeros_like(u_values, dtype=torch.bool)
 
         condition_ids = None
         if prompt_gen is not None and torch.any(use_prompt):
             condition_ids = drift_types_to_condition_ids(drift_types, device)
 
-        # 模型分派：u=0→base（prompt 遗留可选），u=1→adapter，u=2→retrain。
-        # adapter 提供时 u=1 走 adapter（优先于 prompt）；未提供时回退旧 prompt 行为。
-        model_variants = [("base", model, ~use_adapter & ~use_retrain)]
+        # 模型分派：u=0→旧 adapter（缺省 base），u=1→云端新 adapter，u=2→retrain。
+        model_variants = [("base", model, ~use_before & ~use_adapter & ~use_retrain)]
+        if before_model is not None:
+            model_variants.append(("adapter_before", before_model, use_before))
         if adapter_model is not None:
             model_variants.append(("adapter", adapter_model, use_adapter))
         if retrain_model is not None:
@@ -614,6 +651,23 @@ def evaluate(model, retrain_model, adapter_model, prompt_gen, loader, policy, ar
                     prompt_tokens=prompt_tokens,
                 )
                 policy_logits[local_indices] = local_logits
+                filled_mask[local_indices] = True
+
+        # 兜底：未被任何变体覆盖的时隙（如 u=2 但无 retrain 权重）用 base 按策略前向，
+        # 避免 policy_logits 残留未定义值。
+        if not torch.all(filled_mask):
+            missing_mask = ~filled_mask
+            print(f"警告: {int(missing_mask.sum().item())} 条时隙无匹配模型变体，回退 base 推理")
+            missing_indices = torch.where(missing_mask)[0]
+            missing_logits = run_policy_forward(
+                model,
+                images[missing_mask],
+                view_masks[missing_mask],
+                effective_ratios[missing_mask],
+                args,
+            )
+            policy_logits[missing_indices] = missing_logits
+            filled_mask[missing_indices] = True
 
         policy_pred = policy_logits.argmax(dim=1)
         baseline_match = baseline_pred == labels
@@ -632,6 +686,7 @@ def evaluate(model, retrain_model, adapter_model, prompt_gen, loader, policy, ar
         effective_cpu = effective_ratios.cpu().numpy()
         u_cpu = u_values.cpu().numpy()
         use_prompt_cpu = use_prompt.cpu().numpy()
+        use_before_cpu = use_before.cpu().numpy()
         use_retrain_cpu = use_retrain.cpu().numpy()
         for local_idx, sample_id in enumerate(sample_ids):
             row = {
@@ -647,6 +702,7 @@ def evaluate(model, retrain_model, adapter_model, prompt_gen, loader, policy, ar
                 "struct_drift": float(struct_drifts[local_idx].item()),
                 "u": int(u_cpu[local_idx]),
                 "used_prompt": int(use_prompt_cpu[local_idx]),
+                "used_before_adapter": int(use_before_cpu[local_idx]),
                 "used_retrain": int(use_retrain_cpu[local_idx]),
                 "active_views": int(view_masks_cpu[local_idx].sum()),
                 "effective_token_ratio_sum": float(effective_cpu[local_idx].sum()),
@@ -684,7 +740,9 @@ def print_summary(metrics, args):
     print(f"评估模式: {args.eval_mode}")
     print(f"漂移日程: {args.drift_schedule}")
     print(f"Prompt 接入: {args.prompt_checkpoint is not None}, prompt_for_u={args.prompt_for_u}")
-    print(f"Adapter 接入: {args.adapter_checkpoint is not None}, adapter_for_u={args.adapter_for_u}, r={args.adapter_r}")
+    print(f"Adapter 接入: 云端新(u=1)={args.adapter_checkpoint is not None}, "
+          f"本地旧(u=0)={args.adapter_checkpoint_before is not None}, "
+          f"adapter_for_u={args.adapter_for_u}, r={args.adapter_r}")
     print(f"Retrain 接入: {args.retrain_checkpoint is not None}")
     print(f"样本数: {metrics['total']}")
     print(f"完整 4 视角准确率: {metrics['baseline_acc']:.4%}")
@@ -713,11 +771,12 @@ def main():
     loader = build_loader(args)
     model = load_model(args, checkpoint_path, device)
     prompt_gen = load_prompt_bundle(args, model, device)
-    adapter_model = load_adapter_model(args, checkpoint_path, device)
+    before_model, adapter_model = load_adapter_models(args, checkpoint_path, device)
     retrain_model = load_retrain_model(args, device)
 
     metrics = evaluate(
-        model, retrain_model, adapter_model, prompt_gen, loader, policy, args, device
+        model, retrain_model, adapter_model, before_model, prompt_gen,
+        loader, policy, args, device,
     )
     write_rows(args.output, metrics["rows"], args.num_views)
     print_summary(metrics, args)
