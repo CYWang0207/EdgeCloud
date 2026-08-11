@@ -9,8 +9,14 @@
 - **赛题**：XH-202606，面向云边协同场景的分布式人工智能感知与决策关键技术研究
 - **发榜单位**：山东浪潮数据库技术有限公司
 - **提交截止**：2026-08-31（邮件提交至 wangqun@inspur.com）
-- **关键时间节点**：8/3 MVP、8/10 硬指标数字确认、8/17 代码冻结、8/21 最终交付、8/31 提交截止
+- **关键时间节点**：8/3 MVP ✅、8/10 硬指标数字确认 ✅、**8/17 代码冻结（当前）、8/21 最终交付、8/31 提交截止**
 - **仓库**：https://github.com/CYWang0207/EdgeCloud（私有仓）
+
+### 当前状态（2026-08-11 快照）
+- **8/10 硬指标周评审已过**：六项硬指标全部出真数达标（见下方「已达标硬指标」表，8/6-8/11 更新）
+- **8/11 B 交付包已产出**：任务1 恢复率表（95% CI）+ 任务2 双场景能力保持柱状图 + 任务3 集中式基准对比（详见 `results/`，不入 Git）
+- **当前分支** `feat/baseline-network-sim-to-main` 领先 main 50 个提交（多节点仲裁、相机退化 adapter、VLM 软标签、network_sim 均已并入）；8/6 前所有代码已提交，仓库内无未提交代码变更
+- **待办主线**：8/17 代码冻结前收尾多节点真数（思路B）、VLM 真老师确认、报告成稿
 
 ### 三大核心功能（赛题要求）
 1. 边缘实时感知与轻量化推理——基于国产开源全量大模型（如 DeepSeek）压缩构建边侧轻量大模型，毫秒级感知，离线/弱网可用
@@ -42,7 +48,7 @@
 |---|---|---|
 | 王成洋（队长） | 系统集成 + 多节点协同 | 总体架构、接口统筹、AdaptFormer 模块、主循环集成、多节点冲突检测与仲裁 |
 | 钟捷杭（B） | 模型评测 | TTFT / 内存 / 延迟测量、集中式基准对比、端到端时延、80-90% 能力保持曲线、硬指标汇总 |
-| 张晨（C） | 第二场景 | SEVD 数据集适配、全流程训练、train_adapter 训练管线（云端 VLM 蒸馏→adapter） |
+| 张晨（C） | 第二场景 | BoxCars116k 数据集适配、全流程训练、train_adapter 训练管线（云端 VLM 蒸馏→adapter，已产真权重） |
 | 唐凤玲 (D) | 网络韧性 + 评测 | 网络波动模拟器 network_sim.py、业务连续性指标、网络韧性实验 |
 | 苏程鑫 （E）| 文档 / 实验统筹 | 技术报告、对比图表、Demo 视频、进度追踪、方案文档维护 |
 
@@ -110,17 +116,22 @@ EdgeCloud/
 │   ├── dataset.py / drift_dataset.py
 │   ├── prompt_tuning/               # PromptGenerator（PEFT，现作为可选辅助；存在两套实现待清理）
 │   ├── train.py / train_retrain_drift.py / train_token_prompt.py  # 场景一 ModelNet40 训练管线
-│   ├── train_adapter.py             # C 8/4 起，云端 VLM 软标签蒸馏→只训 adapter（8/3 晚骨架已写，待服务器跑）
+│   ├── train_adapter.py             # C 8/4 起，云端 VLM 软标签蒸馏→只训 adapter（已产出真权重）
+│   ├── boxcars_camera_drift_dataset.py  # BoxCars 重新校准的监控相机退化（8/6 新增）
+│   ├── calibrate_{boxcars,modelnet}_camera_corruptions.py  # 先校准后训练流程
+│   ├── evaluate_*_camera_adapter.py / evaluate_*_drift_adapters.py  # 逐类退化评测
 │   └── benchmarks/                  # B 的评测脚本
 │       ├── benchmark_latency.py     # TTFT/延迟（已达标）
 │       ├── benchmark_memory.py      # 内存（已达标）
-│       ├── benchmark_full.py        # 精度+延迟+内存一体化（已支持 modelnet40|boxcars 双场景）
+│       ├── benchmark_full.py        # 精度+延迟+内存一体化（支持 adapter on/off + modelnet40|boxcars 双场景）
+│       ├── benchmark_centralized.py # 集中式 vs 边缘本地 vs 端边协同 三架构对比（8/3 B）
+│       ├── benchmark_e2e.py         # u=0/u=1/u=2 三模式端到端时延分解（组长公式）
 │       ├── build_scheduler_latency.py  # 接口1：延迟喂调度器
 │       ├── demo_mvp.py              # 8/3 MVP 演示（内存为硬编码估值，非真测）
 │       └── results/                 # CSV + PNG 实测结果
 ├── module_scheduling/               # 模块二：云边协同调度
 │   ├── EdgeCloud_RL/
-│   │   ├── main_edge_cloud_new.py   # 单节点主循环（已接 generate_real_trajectory 轨迹，待接 network_sim + adapter u=1）
+│   │   ├── main_edge_cloud_new.py   # 单节点主循环（已接 generate_real_trajectory 轨迹；8/6 已接 network_sim 出业务保持率/e2e）
 │   │   ├── main_edge_cloud.py       # 【已失效】旧版，调用 Critic 仅 6 参，现 Critic 签名为 8 参，勿用
 │   │   ├── critic_water_filling.py  # 注水闭式解 Critic（8/3 晚已改：u=1 走 S_adapter 口径）
 │   │   ├── actor_memory.py          # Actor DNN + 经验回放
@@ -128,27 +139,36 @@ EdgeCloud/
 │   │   ├── evaluate_rl_policy_on_mvvit.py  # RL 策略真实评估（8/3 晚已改：u=1 常挂 adapter + 加载下发权重）
 │   │   └── plot_*.py                # 准确率/token 数时序画图
 │   ├── comparison_baselines/        # LSCI/VBRD/Hyperion 基线（有意弱化，答辩公平性有风险）
-│   └── multi_node/                  # 【待建】arbiter.py / overlap_manager.py / rollback.py
+│   └── multi_node/                  # ✅ 已实现（8/6 并入）
+│       ├── arbiter.py               # 冲突检测 + 仲裁（加权投票/贝叶斯，可插拔）+ 回滚 + 统计；纯 Python 可跑
+│       └── multi_node_eval.py       # 多节点冲突率≤5%/解决率≥90% 评估
 ├── common/drift_dataset.py          # 确定性漂移主实现（5类×6档 schedule）；注意 module_scheduling/EdgeCloud_RL/ 下有副本，导入路径不统一
 ├── data/  data/README.md           # 数据集不进 Git（ModelNet40 ~2GB、BoxCars116k）
 ├── models/ models/README.md         # 权重不进 Git（注：checkpoints/*.pth 当前为 0 字节占位，真权重在服务器）
 ├── docs/
-│   ├── 方案总览.md                   # 苏程鑫维护，待改为 Adapter 叙事
-│   ├── 接口契约.md                   # 接口1-4（u=1 需改为 adapter 同步）
-│   ├── 第二场景_BoxCars116k.md       # 张晨第二场景定义（baseline 88.04% Top-1）
+│   ├── 方案总览.md                   # 苏程鑫维护，已改为 Adapter 叙事
+│   ├── 接口契约.md                   # 接口1-4，u=1 已改为 adapter 同步口径
+│   ├── 第二场景_BoxCars116k.md       # 张晨第二场景定义（baseline 88.04% Top-1，adapter 94.3%）
+│   ├── 多场景漂移校正Adapter实验总览_20260806.md  # 双场景先校准后训练结果
+│   ├── VLM软标签验证.md
+│   ├── 漂移校正Adapter方案.md
+│   ├── 网络波动模拟器设计.md          # 唐凤玲四档网络模式设计
 │   └── 环境配置避坑指南.md
 ├── scripts/verify_env.py
 └── requirements.txt
 ```
 
-### 已达标硬指标（B 的 benchmark 实测，2026-07-30 快照）
+### 已达标硬指标（B 的 benchmark 实测，2026-08-06 真数 / 8-11 交付包更新）
 | 指标 | 实测 | 状态 |
 |---|---|---|
-| 参数量 | 21.7M (ViT-Small) | ✅ |
-| TTFT 降幅 | 86.8%（287→38ms，keep=0.1） | ✅ |
-| 推理内存 | 0.08GB | ✅ |
-| 单帧延迟 | 38ms | ✅ |
-| 精度列 | BoxCars116k make 16 类 Top-1=88.04% / Top-5=97.13%（30 轮 baseline，场景二） | ✅ 场景二 |
+| 参数量 | 22.0M（ViT-Small 21.8M + adapter 0.3M） | ✅ |
+| TTFT 降幅 | 87.2%（keep=0.1，挂张晨真 adapter 权重；8/6 真数） | ✅ ≥75% |
+| 推理内存 | 0.082GB | ✅ ≤1.5GB |
+| 端到端时延 | u=0 本地 25.2ms；端边协同 104–121ms（四档网络，8/11 集中式基准） | ✅ ≤0.2s |
+| adapter 下发体积 | 1.2MB（0.300M 参，S_adapter 口径吻合） | ✅ 几百KB~MB |
+| 精度 | BoxCars make 16 类 adapter 蒸馏 Top-1=94.3%；baseline 88.04%；ModelNet40 adapter 96.47% clean | ✅ 双场景 |
+| 网络韧性 | 弱网业务可用性 91–100%（Markov 91%、outage 100%）；集中式仅 5.5% | ✅ ≥90% |
+| 冲突指标 | 冲突率≤5% / 解决率≥90%（arbiter 思路A 自测通过；思路B 真轨迹数待跑） | ⏳ 待思路B |
 
 ---
 
@@ -188,42 +208,45 @@ class NetworkSimulator:
 
 ---
 
-## 六、本周（8/3-8/9）关键路径与依赖
+## 六、当前（8/11-8/21）关键路径与依赖
 
-### 主关键路径（最长，决定 8/10 能否出数）
+### 主关键路径（决定 8/17 代码冻结）
 ```
-王成洋 adaptformer.py(8/4) → C train_adapter 训练(8/5) → C adapter 权重(8/5-8/8)
-  → B 全指标评测(8/6-8/7) → B 80-90% 能力曲线(8/7) → 苏程鑫 报告填数(8/8) → 8/10 指标定稿
+8/10 硬指标已全部出真数 ✅ → 多节点思路B 真轨迹冲突率（8/11-8/13）
+  → VLM 真老师确认/接入（8/12-8/14，风险1）→ 代码冻结收尾+清理技术债（8/15-8/17）
+  → E 报告成稿+Demo 视频（8/16-8/20）→ 8/21 最终交付
 ```
-**原最大瓶颈 adaptformer.py 已于 8/3 晚 verify 跑通（卡点解除）；当前瓶颈转为 C 的 adapter 训练权重产出（8/5-8/8）。**
 
-### 每人本周主线
-- **王成洋**：adaptformer.py(8/3-8/4) → u=1 adapter sync 接入(8/5) → Dora 重训→adapter 重构(8/6) → 多节点 arbiter(8/7-8/8) → 系统联调(8/9)
-- **张晨 C**：~~SEVD 任务定义~~ → 已改用 BoxCars116k（baseline 已 88% 跑通）→ train_adapter.py(8/4-8/5，待 adaptformer.py 落地) → 两场景 adapter 权重(8/5-8/8) → 漂移重训(8/7)
-- **钟捷杭 B**：benchmark_full 扩 adapter 口径 + benchmark_e2e 骨架(8/3) → 集中式基准+e2e(8/4-8/5) → 真权重全指标(8/6) → 80-90% 能力保持曲线(8/7) → 冲突率统计(8/8) → 指标对照表(8/9)
-- **唐凤玲**：network_sim 6 点决策+开写(8/3) → network_sim.py 完成(8/4) → 弱网实验(8/5-8/6) → 接入 e2e(8/7) → 仲裁下发韧性(8/8) → 数据定稿(8/9)
-- **苏程鑫**：方案文档改 Adapter 叙事(8/3) → 接口契约 v2(8/4) → 答辩叙事(8/5) → 报告框架(8/7) → 填数据出图(8/8) → 汇报材料(8/9)
+### 8/11-8/17 每人主线
+- **王成洋**：多节点思路B 接主循环真轨迹 → 冲突率≤5%/解决率≥90% 真数 → 系统联调收尾
+- **张晨 C**：adapter 权重已产出（BoxCars 94.3% / ModelNet40 96.47% clean）→ 补漂移重训 + 配合 B 出能力保持曲线
+- **钟捷杭 B**：8/11 交付包已出（恢复率/能力曲线/集中式对比）→ 冲突率统计（思路B 数据）→ 指标对照表定稿
+- **唐凤玲**：网络韧性数据已出（Markov 91%）→ 仲裁下发韧性接入 → 数据定稿
+- **苏程鑫**：报告填 8/6-8/11 新数据 → 答辩叙事 → Demo 视频
 
-### 8/10 硬指标交付清单
-| 指标 | 负责人 |
-|---|---|
-| 参数量 / TTFT / 内存 / 单帧延迟 | B |
-| 80-90% 能力保持曲线（adapter vs 云端 VLM） | B + C |
-| 端到端时延 ≤0.2s（含网络） | B + 唐凤玲 |
-| 业务保持率 ≥90% | 唐凤玲 |
-| 冲突 ≤5% / 解决 ≥90% | 王成洋 + B |
-| ≥2 类场景（ModelNet40 + BoxCars116k） | C |
+### 8/17 代码冻结前清单
+| 项 | 负责人 | 状态 |
+|---|---|---|
+| 六项硬指标真数 | B | ✅ 8/6-8/11 |
+| 80-90% 能力保持曲线 | B + C | ✅ 8/11 交付 |
+| 端到端时延 ≤0.2s（含网络） | B + 唐凤玲 | ✅ 104-121ms |
+| 业务保持率 ≥90% | 唐凤玲 | ✅ 91-100% |
+| 冲突 ≤5% / 解决 ≥90% | 王成洋 + B | ⏳ 待思路B |
+| ≥2 类场景（ModelNet40 + BoxCars116k） | C | ✅ |
+| VLM 真老师接入 | 王成洋 + 老师 | ⏳ 风险1 |
+| 代码冻结 + 技术债清理 | 全体 | ⏳ |
+| 报告初稿 + Demo 视频 | 苏程鑫 | ⏳ |
 
 ---
 
 ## 七、关键风险与待确认
 
-1. **VLM Oracle 现在是模拟的**——adapter 蒸馏需要真"老师"，本周内至少接一个真 VLM（InternVL/Qwen-VL）产软标签，否则"云端大模型压缩→adapter"叙事不实。需和老师确认 VLM 推理资源。
-2. **~~SEVD 任务语义错配~~ → 已解决**：张晨已放弃 SEVD，改选 **BoxCars116k 交通车辆品牌识别（16 类 make 分类任务）**。BoxCars 是分类任务，与 MV-ViT 分类模型语义匹配，错配问题消除。baseline 已 30 轮训练，官方 test Top-1=88.04%、Top-5=97.13%（详见 `docs/第二场景_BoxCars116k.md`）。注意 BoxCars 不提供跨摄像头身份，4 张图是同一摄像头下同车轨迹的 4 个时间观测 + `view_mask`，叙事上不得表述为"四台摄像头同拍一辆车"。
-3. **"80-90% 能力保持"指标口径**——赛题写"数学/代码/NLP"，本项目是视觉任务。需让老师/队长问发榜单位：adapter 方案算不算"基于全量大模型压缩"？80-90% 指标在视觉任务上能否按"边缘 adapter 保持云端 VLM 能力百分比"理解？问清就踏实。
-4. **基线公平性**——comparison_baselines 的 LSCI/VBRD/Hyperion 被有意弱化，README 已明文承认"简化版突出缺点"；答辩若被追问公平性有风险，至少一个基线用未弱化实现。
-5. **prompt/adapter 50/50 已于 8/3 定 adapter**——prompt 代码不删，作"环境漂移快响应"可选辅助，但本周不铺开做，先把 adapter 主线打透。当前 prompt 存在两套互不兼容实现（顶层 `train_token_prompt.py` 用 `EarlyFusionMultiViewViT`+5类漂移；`prompt_tuning/` 子目录用独立 `PromptMultiViewViT`+仅亮度3类），属待清理技术债。
-6. **代码与文档同步进度**——8/3 拍板的 adapter 方案：`adaptformer.py` 王成洋 8/3 已实现，**8/3 晚本机 py3.11 verify_adaptformer.py 三点验收全通过**（①零初始化 Δ=0 ②adapter 0.300M<1M ③三条前向路径+wrapper hook 全触发）；`train_adapter.py` 骨架 8/3 晚已写（预计算软标签蒸馏，待服务器跑通）；u=1 已在 critic_water_filling / baseline_common / main_edge_cloud_new / evaluate_rl_policy 四处由 S_prompt/prompt 注入改为 S_adapter/adapter 加载（8/3 晚代码层完成，待真轨迹/权重验证）；方案总览.md、README.md、接口契约.md 叙事已对齐 Adapter。
+1. **VLM Oracle 现在是模拟的**——adapter 蒸馏需要真"老师"，需在 8/17 代码冻结前至少接一个真 VLM（InternVL/Qwen-VL）产软标签，否则"云端大模型压缩→adapter"叙事不实。需和老师确认 VLM 推理资源。**（8/6 前仍为最大待确认项）**
+2. **~~SEVD 任务语义错配~~ → 已解决**：张晨已放弃 SEVD，改选 **BoxCars116k 交通车辆品牌识别（16 类 make 分类任务）**。baseline 已 30 轮训练，官方 test Top-1=88.04%、Top-5=97.13%；adapter 蒸馏后 94.3%（详见 `docs/第二场景_BoxCars116k.md`）。注意 BoxCars 不提供跨摄像头身份，4 张图是同一摄像头下同车轨迹的 4 个时间观测 + `view_mask`，叙事上不得表述为"四台摄像头同拍一辆车"。
+3. **"80-90% 能力保持"指标口径**——赛题写"数学/代码/NLP"，本项目是视觉任务。需让老师/队长问发榜单位：adapter 方案算不算"基于全量大模型压缩"？80-90% 指标在视觉任务上能否按"边缘 adapter 保持云端 VLM 能力百分比"理解？**8/6 起已用能力保持曲线支撑（ModelNet40 96.47% / BoxCars 94.14% clean，退化下 +5~11pp 恢复）。**
+4. **基线公平性**——comparison_baselines 的 LSCI/VBRD/Hyperion 被有意弱化，README 已明文承认"简化版突出缺点"；答辩若被追问公平性有风险，至少一个基线用未弱化实现。**8/5 已确认三基线全部可跑（20 步仿真），真实精度待 evaluate_rl_policy_on_mvvit 计算。**
+5. **prompt/adapter 50/50 已于 8/3 定 adapter**——prompt 代码不删，作"环境漂移快响应"可选辅助，本周不铺开做，先把 adapter 主线打透。当前 prompt 存在两套互不兼容实现（顶层 `train_token_prompt.py` 用 `EarlyFusionMultiViewViT`+5类漂移；`prompt_tuning/` 子目录用独立 `PromptMultiViewViT`+仅亮度3类），属 8/17 代码冻结前的待清理技术债。
+6. **代码与文档同步进度**——adapter 方案已全面落地：`adaptformer.py` 王成洋 8/3 实现、verify_adaptformer.py 三点验收通过；`train_adapter.py` 已产出真权重（张晨）；u=1 已在 critic_water_filling / baseline_common / main_edge_cloud_new / evaluate_rl_policy 四处改为 S_adapter/adapter 加载；方案总览.md、README.md、接口契约.md 叙事已对齐 Adapter。**8/6 新增 BoxCars/ModelNet40 相机退化校准实验与多节点 arbiter。**
 
 ---
 
