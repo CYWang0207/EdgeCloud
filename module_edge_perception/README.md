@@ -31,6 +31,7 @@ module_edge_perception/
 ├── export_boxcars_cloud_teacher_cache.py # BoxCars 云教师缓存
 ├── train_boxcars_cloud_teacher_adapter.py # BoxCars 无标签 Adapter 刷新
 ├── evaluate_boxcars_cloud_teacher.py # BoxCars 漂移对比评测
+├── evaluate_boxcars_cloud_teacher_quick_test.py # 固定 checkpoint 独立 test：默认 256 条 class-stratified，--samples 0 全量 12,322 条；teacher 参数可省略跳过 6B
 ├── modelnet_camera_drift_dataset.py  # ModelNet40 相机退化包装
 ├── modelnet_cloud_teacher_refresh.py # ModelNet40 头训练/刷新/选型/终评
 ├── calibrate_boxcars_camera_corruptions.py # BoxCars 退化敏感度校准
