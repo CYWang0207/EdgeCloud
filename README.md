@@ -35,7 +35,7 @@ EdgeCloud/
 ├── module_scheduling/              # 模块二：云边协同调度
 │   ├── EdgeCloud_RL/                #   Actor-Critic RL + Lyapunov 主循环 + 注水 Critic + 网络模拟器
 │   ├── comparison_baselines/       #   LSCI/VBRD/Hyperion 基线
-│   ├── multi_node/                 #   【待建】多节点冲突检测与仲裁
+│   ├── multi_node/                 #   多节点冲突检测与仲裁（arbiter.py + multi_node_eval.py）
 │
 ├── common/                          # 漂移模拟器（5种×6档 schedule）
 ├── data/                            # 数据集（不进 Git：ModelNet40、BoxCars116k）
@@ -50,11 +50,11 @@ EdgeCloud/
 ```
          +---------- 云端 Cloud ----------+
          | 场景校准与 Adapter 训练          |
-         | · 扫描 baseline 对退化的敏感性   |
-         | · clean/corrupt 成对训练 adapter |
+         | · InternViT-6B 提取 {features, logits}   |
+         | · Teacher Cache → 四目标蒸馏训练 adapter |
          | · 多节点冲突仲裁                |
          +---+--------------------+------+
-   上行关键帧 |                    | 下行 adapter 参数（几百KB~MB）/ 重训权重
+   上行漂移样本 |                    | 下行 adapter（约 1.2MB）+ u=2 重训权重
              |                    v
          +--------------------------------+
          |    边缘 Edge（路口盒子）        |
