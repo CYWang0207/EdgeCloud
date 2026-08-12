@@ -14,10 +14,10 @@
 |------|------|------|
 | 端到端时延 | <= 0.2s | 视角休眠 + Token 剪枝 + O(V²) 注水 |
 | 业务连续性 | >= 90% | Lyapunov 稳定性 + ut=0 本地自治 |
-| 决策冲突 | < 5% | 云端 VLM 全局仲裁 |
+| 决策冲突 | < 5% | 云端全局仲裁 |
 | 冲突解决 | >= 90% | 置信度加权投票 + 回滚 |
 
-## 目录约定（部分目录待建）
+## 目录约定
 
 ```
 module_scheduling/
@@ -29,7 +29,7 @@ module_scheduling/
 │   ├── network_sim.py           # 网络波动模拟器
 │   └── plot_*.py
 ├── comparison_baselines/     # LSCI/VBRD/Hyperion 基线（有意弱化，答辩公平性有风险）
-├── multi_node/                # 【待建】arbiter.py / overlap_manager.py / rollback.py
+├── multi_node/                # arbiter.py + multi_node_eval.py
 ```
 
 

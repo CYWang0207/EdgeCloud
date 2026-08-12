@@ -31,6 +31,7 @@ module_edge_perception/
 ├── export_boxcars_cloud_teacher_cache.py # BoxCars 云教师缓存
 ├── train_boxcars_cloud_teacher_adapter.py # BoxCars 无标签 Adapter 刷新
 ├── evaluate_boxcars_cloud_teacher.py # BoxCars 漂移对比评测
+├── evaluate_boxcars_cloud_teacher_quick_test.py # 固定 checkpoint 独立 test：默认 256 条 class-stratified，--samples 0 全量 12,322 条；teacher 参数可省略跳过 6B
 ├── modelnet_camera_drift_dataset.py  # ModelNet40 相机退化包装
 ├── modelnet_cloud_teacher_refresh.py # ModelNet40 头训练/刷新/选型/终评
 ├── calibrate_boxcars_camera_corruptions.py # BoxCars 退化敏感度校准
@@ -61,7 +62,7 @@ module_edge_perception/
 刷新阶段只使用教师 logits/feature、干净回放约束和边缘输出。开发集负责选择固定 checkpoint，官方 test
 只用于最终一次评测。具体协议与命令见：
 
-- `../docs/云端视觉教师Adapter方案_20260809.md`
+- `../docs/实验结果总览_20260809.md`
 - `../docs/第一场景_ModelNet40.md`
 
 下列直接使用 clean/corrupt 标签的训练命令保留为监督基线，不再代表正式提交方法。
