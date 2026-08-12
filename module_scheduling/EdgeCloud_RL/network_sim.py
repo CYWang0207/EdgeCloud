@@ -95,12 +95,14 @@ class NetworkSimulator:
         retrain_cloud_delay_ms: float = 0.0,
         adapter_size_mb: float = 1.2,
         query_size_mb: float = 5.0,
+        foreground_query_size_mb: float = 0.0,
+        include_adapter_in_foreground: bool = False,
         u2_update_size_mb: float = 50.0,
         scl_weights_mb: Optional[float] = None,
         scl_weights: Optional[float] = None,
         deadline_ms: float = 200.0,
         acc_floor: float = DEFAULT_ACC_FLOOR,
-        business_min_active_views: int = 1,
+        business_min_active_views: int = 3,
         overflow_penalty: float = 5.0,
         strict_bandwidth: bool = False,
         sync_u2: bool = False,
@@ -142,6 +144,8 @@ class NetworkSimulator:
         self.retrain_cloud_delay_ms = float(retrain_cloud_delay_ms)
         self.adapter_size_mb = float(adapter_size_mb)
         self.query_size_mb = float(query_size_mb)
+        self.foreground_query_size_mb = float(foreground_query_size_mb)
+        self.include_adapter_in_foreground = bool(include_adapter_in_foreground)
         if scl_weights_mb is not None:
             u2_update_size_mb = scl_weights_mb
         if scl_weights is not None:
@@ -542,13 +546,18 @@ class NetworkSimulator:
         )
 
     def realtime_comm_mb(self, u: Optional[int], c_comm: float) -> float:
+        realtime_comm = 0.0
+        if u == 1:
+            realtime_comm += self.foreground_query_size_mb
+            if self.include_adapter_in_foreground:
+                realtime_comm += self.adapter_size_mb
         if u == 2 and self.sync_u2:
-            return float(c_comm)
-        return 0.0
+            realtime_comm += float(c_comm)
+        return float(realtime_comm)
 
     def background_comm_mb(self, u: Optional[int], c_comm: float) -> float:
         if u == 1:
-            return self.adapter_size_mb
+            return 0.0 if self.include_adapter_in_foreground else self.adapter_size_mb
         if u == 2 and not self.sync_u2:
             return self.u2_update_size_mb
         return 0.0
@@ -564,7 +573,7 @@ class NetworkSimulator:
         return int(math.ceil(max(delay_ms, 0.0) / slot_ms))
 
     def background_task_type(self, u: Optional[int]) -> str:
-        if u == 1:
+        if u == 1 and not self.include_adapter_in_foreground:
             return "adapter"
         if u == 2 and not self.sync_u2:
             return "scl_weights"
