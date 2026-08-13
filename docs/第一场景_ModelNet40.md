@@ -1,8 +1,12 @@
 # 第一场景：ModelNet40 大 ViT 云教师
 
-> 本文是本数据集的结果文档，数值来自云端 `adjust` 分支 2026-08-09 实际运行并回传的
-> `local/results/modelnet40_cloud_teacher_full_test_20260809/`，与交付包
-> `local/delivery/modelnet40_recovery_metrics_20260809/` 同源。方法要点与总体结论见
+> 2026-08-12 对最终无标签 Adapter 进行一次 clean-guard 再训练：复用既有
+> InternViT feature cache，不改变数据划分、教师或 Adapter 结构；新权重在同一完整 official
+> test 上将 clean 提升至 95.705%，illumination 提升至 92.301%。本节中的“最终版”均指该权重。
+
+> 本文是本数据集的结果文档；8/9 初始实验来自云端 `adjust` 分支
+> `local/results/modelnet40_cloud_teacher_full_test_20260809/`，8/12 clean-guard 复训结果
+> 固化在 `results/modelnet40_cloud_teacher_clean_guard_20260812/`。方法要点与总体结论见
 > [`实验结果总览_20260809.md`](实验结果总览_20260809.md)；完整方法设计归档于
 > `local/archive/status_docs_20260810/云端视觉教师Adapter方案_20260809.md`。
 
@@ -62,7 +66,7 @@ teacher mean drift 领先 **3.542 pp**，准入通过。数值来自 `teacher_ga
 | Cloud unlabeled（初始） | 95.827% | 88.898% | 93.598% | 91.370% | 91.289% |
 | Label-only upper bound | 96.313% | 90.032% | 94.692% | 93.152% | 92.625% |
 | Hybrid | 96.070% | 90.113% | 94.368% | 92.707% | 92.396% |
-| **Cloud unlabeled（最终 illumination 专项版）** | **95.381%** | **90.154%** | **94.327%** | **92.788%** | **92.423%** |
+| **Cloud unlabeled（最终 clean-guard 专项版）** | **95.705%** | **92.301%** | **94.449%** | **92.990%** | **93.247%** |
 
 本数据集实际评估了**多种方法对照**，不是只有一种：`cloud_unlabeled`（无上传标签主系统）、
 `label_only`（有标签监督上界）、`hybrid`（CE+teacher 同时使用的消融），以及后续
@@ -70,42 +74,41 @@ illumination 专项调优得到的最终 `cloud_unlabeled_illumination_tuned`。
 
 ### 最终专项版相对 Edge baseline
 
-| 条件 | 提升 | 2,000 次配对 bootstrap 95% CI |
+| 条件 | 相对 Edge baseline 的完整测试提升 | 备注 |
 |---|---:|---:|
-| Clean | −1.378 pp | [−1.945, −0.810] pp |
-| Illumination 1.0 | +1.013 pp | [−0.001, +2.066] pp |
-| Defocus 0.2 | +5.915 pp | [+4.903, +7.010] pp |
-| Sensor noise 0.4 | +8.388 pp | [+7.131, +9.684] pp |
-| 三漂移平均 | **+5.105 pp** | — |
+| Clean | −1.053 pp | — |
+| Illumination 1.0 | +3.160 pp | — |
+| Defocus 0.2 | +6.037 pp | — |
+| Sensor noise 0.4 | +8.590 pp | — |
+| 三漂移平均 | **+5.929 pp** | — |
 
-无标签 Adapter 相对 baseline 的三漂移平均提升为 **5.105 pp**，defocus、noise 的增益在
-2,468 条全量样本上区间不跨 0；illumination 从初始版的 −0.243 pp 修正为 +1.013 pp（见下），
-clean 的代价为 −1.378 pp，能力保持曲线中如实展示。
+无标签 Adapter 相对 baseline 的三漂移平均提升为 **5.929 pp**。相比 8/9 的最终专项版，
+clean 额外恢复 **0.324 pp**，illumination 额外提升 **2.147 pp**；clean 仍低于 frozen Edge
+baseline 1.053 pp，能力保持曲线中如实展示。
 
-### 为什么需要 illumination 专项调优（dev-only 选择）
+### clean-guard 专项调优（dev-only 选择）
 
-初始 cloud-unlabeled Adapter 已显著恢复 defocus 和 noise，但 illumination 在完整 test 上仍
-比 baseline 低 0.243 pp。因此只用 train-internal dev 选择 illumination 强化配置：对
-illumination refresh 轨迹过采样、增强 task-logit KD、降低通用 feature 对齐权重，并约束
-clean / defocus / noise 不低于准入条件。正式 refresh loss 的 CE 权重仍为 0，不读取这 480 条
-轨迹的真实标签。三个候选 profile：
+8/9 的 6× illumination profile 虽使 illumination 转正，但 clean 代价扩大至 −1.378 pp。
+本轮因此将 illumination 过采样收敛至 2–4×，把 clean replay anchor 提升至 0.35–0.40，
+并将其温度降至 1；同时将 clean 准入收紧至不低于 dev baseline 0.3 pp。正式 refresh loss
+的 CE 权重仍为 0，不读取这 480 条轨迹的真实标签。三个候选 profile：
 
 | Profile | illum 权重 | KD | feature | anchor | epochs | dev mean drift |
 |---|---:|---:|---:|---:|---:|---:|
-| illum_balanced | 2.0 | 1.0 | 0.2 | 0.15 | 8 | 96.354% |
-| illum_focus | 4.0 | 1.0 | 0.1 | 0.15 | 8 | 96.458% |
-| illum_strong（选中） | 6.0 | 1.2 | 0.05 | 0.1 | 10 | 96.563% |
+| illum_clean_guard | 2.0 | 1.0 | 0.10 | 0.35 | 8 | 96.667% |
+| illum_balanced_guard | 3.0 | 1.0 | 0.08 | 0.40 | 8 | 96.979% |
+| illum_focus_guard（选中） | 4.0 | 1.1 | 0.05 | 0.40 | 10 | 97.083% |
 
-最终选中 `illum_strong`，即下发物 `cloud_unlabeled_illumination_tuned`。完整选型记录见
-`illumination_tuned_summary.json` 与 `illumination_tune.log`。
+最终选中 `illum_focus_guard`，即下发物 `cloud_unlabeled_illumination_tuned`。完整选型记录
+见本地 `results/modelnet40_cloud_teacher_clean_guard_20260812/illumination_tuned_summary.json`。
 
 ## 最终权重与云端 artifact
 
 `models/` 只放边缘最终部署权重：
 
-- `models/modelnet40_cloud_teacher_adapter_20260809/cloud_unlabeled/best.pth`
-  是最终向边缘下发的约 1.2 MB Adapter（实测 1,219,465 bytes，299,916 参数；
-  与云端 `cloud_unlabeled_illumination_tuned_adapter.pth` 同哈希，即 illumination 专项版）。
+- `models/modelnet40_cloud_teacher_adapter_20260812/cloud_unlabeled/best.pth`
+  是最终向边缘下发的约 1.2 MB Adapter（1,219,859 bytes，299,916 参数；SHA-256
+  `1e24728b3ffa1f44f0dfd1db64c7b0f2e195566df8cb2b38e2dbebb037f4d82a`）。
 
 云端 40 类 task head 不进入 Edge 部署，作为实验 artifact 放在：
 

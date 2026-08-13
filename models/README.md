@@ -13,11 +13,12 @@ models/
 ├── mvvit_base/                                            # MV-ViT 基座权重（网盘下载）
 ├── boxcars_cloud_teacher_adapter_20260809/
 │   └── cloud_unlabeled/best.pth                           # BoxCars 正式下发 adapter（约 1.2MB）
-└── modelnet40_cloud_teacher_adapter_20260809/
+└── modelnet40_cloud_teacher_adapter_20260812/
     └── cloud_unlabeled/best.pth                           # ModelNet40 正式下发 adapter（约 1.2MB）
 ```
 
-因此当前恰好只有两个正式模型文件，每个数据集一个。云端 task head 属于实验 artifact，
+因此当前恰好只有两个正式模型文件，每个数据集一个。ModelNet40 权重为 8/12 clean-guard
+再训练的最终版；云端 task head 属于实验 artifact，
 放在对应 `local/results/<dataset>_.../artifacts/`；Edge baseline 和 InternViT backbone
 是输入依赖，也不在这里重复存放。
 
