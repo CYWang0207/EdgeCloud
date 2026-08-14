@@ -290,6 +290,12 @@ def train_adapter(base, refresh_indices, refresh_cache, dev_indices, a, device, 
     kd_weight = float(profile.get("kd_weight", .7))
     feature_weight = float(profile.get("feature_weight", .3))
     anchor_weight = float(profile.get("anchor_weight", .2))
+    # Clean replay is the only clean-data constraint in the strictly
+    # cloud-unlabelled refresh objective.  A lower temperature makes this
+    # constraint protect the frozen Edge decision boundary more directly.
+    anchor_temperature = float(profile.get("anchor_temperature", 2.))
+    if anchor_temperature <= 0.:
+        raise ValueError("anchor_temperature must be positive")
     for epoch in range(1, epochs + 1):
         model.train(); projector.train(); losses = []
         for clean, corrupt, labels, kinds, severities, indices in loader:
@@ -312,8 +318,9 @@ def train_adapter(base, refresh_indices, refresh_cache, dev_indices, a, device, 
                               F.softmax(teacher_logits.float() / 2., 1), reduction="batchmean") * 4.
                 feature = 1 - F.cosine_similarity(F.normalize(projector(student_feature.float()), dim=-1),
                                                    teacher_feature, dim=-1).mean()
-                anchor = F.kl_div(F.log_softmax(replay.float() / 2., 1),
-                                  F.softmax(baseline_clean.float() / 2., 1), reduction="batchmean") * 4.
+                anchor = F.kl_div(F.log_softmax(replay.float() / anchor_temperature, 1),
+                                  F.softmax(baseline_clean.float() / anchor_temperature, 1),
+                                  reduction="batchmean") * anchor_temperature ** 2
                 ce = F.cross_entropy(student_logits.float(), labels)
                 if mode == "cloud_unlabeled" or mode.startswith("illum_"):
                     # The labels tensor is carried by the dataset for auditing,
@@ -456,12 +463,18 @@ def main():
         # Profiles are selected using development data only.  The official
         # test is evaluated once, after the winning profile is fixed.
         profiles = {
-            "illum_balanced": {"illumination_weight": 2., "kd_weight": 1.,
-                               "feature_weight": .2, "anchor_weight": .15, "epochs": 8},
-            "illum_focus": {"illumination_weight": 4., "kd_weight": 1.,
-                            "feature_weight": .1, "anchor_weight": .15, "epochs": 8},
-            "illum_strong": {"illumination_weight": 6., "kd_weight": 1.2,
-                             "feature_weight": .05, "anchor_weight": .1, "epochs": 10},
+            # The historical 6x illumination profile gained only 1.01pp on
+            # illumination but cost 1.38pp clean accuracy.  Keep the bias
+            # modest and make clean replay the primary selection constraint.
+            "illum_clean_guard": {"illumination_weight": 2., "kd_weight": 1.,
+                                  "feature_weight": .10, "anchor_weight": .35,
+                                  "anchor_temperature": 1., "epochs": 8},
+            "illum_balanced_guard": {"illumination_weight": 3., "kd_weight": 1.,
+                                     "feature_weight": .08, "anchor_weight": .40,
+                                     "anchor_temperature": 1., "epochs": 8},
+            "illum_focus_guard": {"illumination_weight": 4., "kd_weight": 1.1,
+                                  "feature_weight": .05, "anchor_weight": .40,
+                                  "anchor_temperature": 1., "epochs": 10},
         }
         candidate_meta = {}
         for name, profile in profiles.items():
@@ -470,7 +483,7 @@ def main():
         eligible = []
         for name, meta in candidate_meta.items():
             scores = meta["validation_accuracy"]
-            if (scores["clean"] >= baseline_dev["clean"] - .01 and
+            if (scores["clean"] >= baseline_dev["clean"] - .003 and
                     scores["defocus_0.2"] >= baseline_dev["defocus_0.2"] and
                     scores["sensor_noise_0.4"] >= baseline_dev["sensor_noise_0.4"]):
                 eligible.append(name)
