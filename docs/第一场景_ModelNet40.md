@@ -51,10 +51,10 @@ ModelNet40 使用独立的 40 类 head。
 | 模型 | Clean | Illumination | Defocus | Sensor noise | Mean drift |
 |---|---:|---:|---:|---:|---:|
 | Edge baseline | 100.000% | 92.188% | 95.000% | 88.750% | 91.979% |
-| InternViT-6B + 40 类 head | 97.188% | 95.000% | 97.188% | 94.375% | **95.521%** |
+| InternViT-6B + 40 类 head | 96.563% | 95.938% | 96.250% | 94.063% | **95.417%** |
 
-teacher mean drift 领先 **3.542 pp**，准入通过。数值来自 `teacher_gate.json` /
-`teacher_head_metrics.json`（best epoch 37，`best_mean_drift=0.955208`）。
+teacher mean drift 领先 **3.437 pp**，准入通过。数值来自 `teacher_gate.json` /
+`teacher_head_metrics.json`（best epoch 80，`best_mean_drift=0.954167`）。
 
 ## 完整 official test（2,468 条四视图轨迹）
 

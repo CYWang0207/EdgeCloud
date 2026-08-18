@@ -1,7 +1,7 @@
 # CLAUDE.md — 挑战杯 EdgeCloud 项目
 
 > 本文件为"面向云边协同场景的分布式人工智能感知与决策关键技术研究"（赛题 XH-202606）参赛项目的 Claude Code 工作指南。任何新会话打开本项目时应先读本文件，以快速恢复团队决策、技术架构与本周推进上下文。
-> **最后更新：2026-08-14**（全量指标均已达标，代码冻结准备就绪）
+> **最后更新：2026-08-14**（8/10 BoxCars 全量 test、8/12 ModelNet40 clean-guard 最终版、8/14 发榜方确认视觉任务口径；业务保持率 90.28-90.32%、冲突率 4.06%/解决率 100%，全量指标均已达标）
 
 ---
 
@@ -25,7 +25,7 @@
 | TTFT 降低 | ≥75% | ✅ 86.8%（287→38ms） |
 | 单次推理内存 | ≤1.5GB | ✅ 0.08GB |
 | 网络波动期业务功能保持率 | ≥90% | ✅ **>90%**（新 adapter illumination_tuned 版全链路过线，含 adapter 前台下发 92-111ms 口径） |
-| 端到端时延（≥2类场景） | ≤0.2s | ✅ **92-111ms**（含真实通信，四档全达标，详见 docs/网络波动模拟器设计.md 7.2节） |
+| 端到端时延（≥2类场景） | ≤0.2s | ✅ **92-111ms**（仿真含通信口径：T_edge 写死 80ms + 仿真通信时延，四档全达标，详见 docs/网络波动模拟器设计.md 7.2节） |
 | 多节点决策冲突比例 | ≤5% | ✅ **4.06%**（BoxCars test 全量 12,322×4 节点，真实多节点实测） |
 | 冲突解决成功率 | ≥90% | ✅ **100%**（weighted/bayesian 双策略均达标） |
 
@@ -166,20 +166,21 @@ EdgeCloud/
 ### 已达标硬指标（实测，2026-08-14 最终快照）
 | 指标 | 实测 | 状态 |
 |---|---|---|
-| 参数量 | 21.7M (ViT-Small) | ✅ |
+| 参数量 | 22.0M（ViT-Small 含 adapter，benchmark 实测） | ✅ |
 | TTFT 降幅 | 86.8%（287→38ms，keep=0.1） | ✅ |
 | 推理内存 | 0.08GB | ✅ |
 | 单帧延迟 | 38ms | ✅ |
 | 能力保持 | 发榜方已确认视觉任务口径："边缘 adapter 保持云端 VLM 场景理解能力的百分比" | ✅ 口径确认 |
 | ModelNet40 baseline 精度 | clean 96.76%（test 全集） | ✅ 场景一 |
 | BoxCars baseline 精度 | Top-1=88.04% / Top-5=97.13%（30 轮 test） | ✅ 场景二 |
-| ModelNet40 Adapter（最终 clean-guard 版） | **漂移平均 93.247%**，vs baseline 87.318%（**+5.93pp**）；clean 95.705%（-1.05pp），illumination +3.16pp，defocus +6.04pp，noise +8.59pp（全量 2,468 条 official test） | ✅ 真数 |
-| BoxCars Adapter | cloud-unlabeled mean drift 85.21% vs edge 81.97%（**+3.24pp**），clean 94.61% 不退化（全量 12,322 条 official test） | ✅ 真数 |
-| adapter 下发体积 | 299,916 参 / 1.2MB（不含 backbone/norm/head/projector） | ✅ |
-| 业务保持率（含通信） | 原始异步口径 99.83-99.96%；**Adapter 前台下发口径**（计入 1.2MB 实时通信）：BoxCars 94.13-99.85%，ModelNet 94.22-99.96%，**全部 >90%**（详见 docs/网络波动模拟器设计.md 7.2节） | ✅ 真数 |
-| 端到端时延（含通信） | **Adapter 前台下发口径**：BoxCars 92.86-111.14ms，ModelNet 92.18-110.27ms，**全部 ≤200ms**（详见 docs/网络波动模拟器设计.md 7.2节） | ✅ 真数 |
-| 冲突率 | **4.06%** ≤5%（BoxCars test 全量 12,322×4 节点，weighted/bayesian 双融合） | ✅ 真数 |
-| 解决率 | **100%** ≥90%（同上） | ✅ 真数 |
+| **cloud-teacher Adapter（BoxCars，全量 test）** | cloud-unlabeled 全量 test（12,322 条）mean drift 74.46%→79.02%（**+4.56pp**），三漂移 95% CI 全不跨 0（illum +4.42 / blur +1.94 / noise +7.33）；clean 88.09% 持平（+0.06pp） | ✅ |
+| **cloud-teacher Adapter（ModelNet40，全量 test）** | cloud-unlabeled 全量 test（2,468 条）mean drift 87.318%→93.247%（**+5.929pp**）；illum +3.160 / defocus +6.037 / noise +8.590；clean 95.705%（−1.053pp） | ✅ |
+| cloud-teacher 教师（InternViT-6B 本身） | BoxCars dev mean drift 89.83%，clean 96.15%；ModelNet40 dev mean drift 95.417%（teacher gate 通过） | ✅ |
+| label-only Adapter（有标签上界） | BoxCars dev mean drift 86.08%；ModelNet40 全量 test 92.625% | ✅ 上界对照 |
+| adapter 下发体积 | 299,916 参 ≈ 1.2MB（BoxCars 1,216,745 bytes / ModelNet40 1,219,859 bytes，不含 backbone/norm/head/projector） | ✅ |
+| 业务保持率（四档） | **申报数**：真模型全链路 90.28-90.32%（acc_floor=0.8，四档全过，异步口径不计实时通信）；仿真含通信口径 BoxCars 94.13-99.85% / ModelNet 94.22-99.96%（proxy_acc 代理值，仅作调度相对效果说明，非申报数，详见 docs/网络波动模拟器设计.md 7.2节） | ✅ |
+| 端到端时延 | 80ms（异步口径，T_edge 写死、不计实时通信）；仿真含 1.2MB 前台下发口径 BoxCars 92.86-111.14ms / ModelNet 92.18-110.27ms 均 ≤200ms（仿真估计，非真机端到端实测）；e2e 达标率 100% | ✅ |
+| 冲突率/解决率 | **冲突率 4.06% ≤5% / 解决率 100% ≥90%**（真 multi_node 全量 test 12,322×4，weighted 与 bayesian 双融合，见 docs/多节点冲突仲裁测试结果_20260811.md） | ✅ |
 | ≥2 类场景 | ModelNet40 + BoxCars116k，两场景均有 cloud-teacher 全量结果 | ✅ |
 
 ---
@@ -191,7 +192,7 @@ EdgeCloud/
 ### 核心原则
 - **Q_net 是物理传输积压队列（状态量），不进效用目标 G 的罚项**；长期平均带宽约束仍由 Y_bw 单一虚拟队列保证，Lyapunov 证明不变。
 - **Y_bw 更新**：`Y_bw[t+1] = max(Y_bw[t] + c_comm - b_avg, 0)`
-- **Q_net 更新**：追踪瞬时积压，带上限(Q_net_max=200MB)+TTL(50时隙)丢弃防无限增长
+- **Q_net 更新**：追踪瞬时积压，带上限+TTL(50时隙)丢弃防无限增长；Q_net_max 代码默认 `max(4·b_avg, S_max)`，测试脚本用 `--q-net-max-mb 200` 覆盖
 - **B_t = R_eff_t × slot_duration / 8**（R_eff 已含 1-p 折扣）
 
 ### 四档网络模式
