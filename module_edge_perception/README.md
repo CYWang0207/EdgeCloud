@@ -5,7 +5,7 @@
 - MV-ViT 多视角推理（ViT-Small, 2200万参数, 4视角早期融合）
 - AdaptFormer adapter：FFN 旁路 PEFT，主干冻结只训 adapter（已落地，8/3 验收通过）
 - Token 剪枝：运行时动态保留率 k_t
-- 漂移模拟与感知：校准后的合成相机漂移（illumination / motion_blur / defocus / sensor_noise）+ 香农熵 Edrift + 结构性漂移
+- 漂移模拟与感知：校准后的合成相机漂移（BoxCars：illumination / motion_blur / sensor_noise；ModelNet40：illumination / defocus / sensor_noise）+ 香农熵 Edrift + 结构性漂移
 - 云端视觉教师：大 ViT 场景分类头 + 教师缓存，代表性漂移样本不使用真实标签
 - Prompt/VLM 条件注入：历史消融方案，不属于当前正式推理链路
 - 性能测量：TTFT、推理延迟、GPU 内存
