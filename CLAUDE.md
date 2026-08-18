@@ -1,7 +1,7 @@
 # CLAUDE.md — 挑战杯 EdgeCloud 项目
 
 > 本文件为"面向云边协同场景的分布式人工智能感知与决策关键技术研究"（赛题 XH-202606）参赛项目的 Claude Code 工作指南。任何新会话打开本项目时应先读本文件，以快速恢复团队决策、技术架构与本周推进上下文。
-> **最后更新：2026-08-13**（8/10 BoxCars 全量 test、8/12 ModelNet40 clean-guard 最终版、真模型全链路业务保持率 90.28-90.32%、多节点冲突率 4.06%/解决率 100% 均已落地；硬指标数字齐备）
+> **最后更新：2026-08-14**（8/10 BoxCars 全量 test、8/12 ModelNet40 clean-guard 最终版、8/14 发榜方确认视觉任务口径；业务保持率 90.28-90.32%、冲突率 4.06%/解决率 100%，全量指标均已达标）
 
 ---
 
@@ -9,7 +9,7 @@
 
 - **赛题**：XH-202606，面向云边协同场景的分布式人工智能感知与决策关键技术研究
 - **发榜单位**：山东浪潮数据库技术有限公司
-- **提交截止**：2026-08-31（邮件提交至 wangqun@inspur.com）；**答辩时间未定，不急**
+- **提交截止**：2026-08-31（邮件提交至 wangqun@inspur.com）
 - **关键时间节点**：8/3 MVP、8/10 硬指标数字确认、8/17 代码冻结、8/21 最终交付、8/31 提交截止
 - **仓库**：https://github.com/CYWang0207/EdgeCloud（私有仓）
 
@@ -19,15 +19,15 @@
 3. 全局决策优化与一致性保障——云端跨域认知，模型分发与更新机制，长周期更新同步至边缘，解决"局部贪婪 vs 全局最优"冲突
 
 ### 硬指标
-| 指标 | 要求 |
-|---|---|
-| 边侧轻量模型保持满血能力 | 80%-90%（数学/代码/自然语言推理） |
-| TTFT 降低 | ≥75% |
-| 单次推理内存 | ≤1.5GB |
-| 网络波动期业务功能保持率 | ≥90% |
-| 端到端时延（≥2类场景） | ≤0.2s |
-| 多节点决策冲突比例 | ≤5% |
-| 冲突解决成功率 | ≥90% |
+| 指标 | 要求 | 最新状态 (2026-08-14) |
+|---|---|---|
+| 边侧轻量模型保持满血能力 | 80%-90%（发榜方已确认视觉任务口径） | ✅ **发榜方已确认**：按"边缘 adapter 保持云端 VLM 场景理解能力的百分比"理解 |
+| TTFT 降低 | ≥75% | ✅ 86.8%（287→38ms） |
+| 单次推理内存 | ≤1.5GB | ✅ 0.08GB |
+| 网络波动期业务功能保持率 | ≥90% | ✅ **>90%**（新 adapter illumination_tuned 版全链路过线，含 adapter 前台下发 92-111ms 口径） |
+| 端到端时延（≥2类场景） | ≤0.2s | ✅ **92-111ms**（含真实通信，四档全达标，详见 docs/网络波动模拟器设计.md 7.2节） |
+| 多节点决策冲突比例 | ≤5% | ✅ **4.06%**（BoxCars test 全量 12,322×4 节点，真实多节点实测） |
+| 冲突解决成功率 | ≥90% | ✅ **100%**（weighted/bayesian 双策略均达标） |
 
 ### 评分（百分制）
 - 技术效果 40（实时性 15 + 感知决策效果 15 + 资源通信效率 10）
@@ -41,10 +41,10 @@
 
 | 成员 | 模块 | 职责 |
 |---|---|---|
-| 王成洋（队长） | 系统集成 + 多节点协同 | 总体架构、接口统筹、AdaptFormer 模块、主循环集成、多节点冲突检测与仲裁、CLAUDE.md 维护 |
-| 钟捷杭（B） | 模型评测 | TTFT / 内存 / 延迟测量、集中式基准对比、端到端时延、能力保持曲线、硬指标汇总 |
-| 张晨（C） | 第二场景 + 云端视觉教师 Adapter | BoxCars116k 适配、cloud-teacher 训练管线（InternViT-6B 教师→无标签 adapter 刷新） |
-| 唐凤玲 (D) | 网络韧性 + 评测 | network_sim.py、业务连续性指标、网络韧性实验、proxy_acc 口径 |
+| 王成洋（队长） | 系统集成 + 多节点协同 | 总体架构、接口统筹、AdaptFormer 模块、主循环集成、多节点冲突检测与仲裁、main_edge_cloud_real_model.py 全链路闭环 |
+| 钟捷杭（B） | 模型评测 | TTFT / 内存 / 延迟测量、集中式基准对比、端到端时延、能力保持曲线、硬指标汇总、benchmark_full 一体化 |
+| 张晨（C） | 第二场景 + 云端视觉教师 Adapter | BoxCars116k 全流程训练、cloud-teacher 训练管线（InternViT-6B 教师→无标签 adapter 刷新）、两场景 adapter 权重产出、clean-guard 专项调优 |
+| 唐凤玲 (D) | 网络韧性 + 评测 | network_sim.py、业务连续性指标、网络韧性实验、含通信 e2e 测试、全链路闭环韧性数据 |
 | 苏程鑫 （E）| 文档 / 实验统筹 | 技术报告、对比图表、Demo 视频、进度追踪、方案文档维护 |
 
 **指导老师**：周睿婷、东方、孟杰
@@ -61,7 +61,7 @@
 ```
          +---------- 云端 Cloud ----------+
          | InternViT-6B-224px 视觉教师     |   ← 冻结，5.9B 参数，国产开源（OpenGVLab）
-         | · 提视觉特征 + BoxCars 分类头  |   ← 训 linear/MLP head 产 task logits
+         | · 提视觉特征 + 场景分类头       |   ← 训 linear/MLP head 产 task logits
          | · 为漂移样本产 {features,logits} cache  |   ← 真在训练回路产监督
          | · 仅训练边缘 MV-ViT-S 的 AdaptFormer     |
          | · 多节点冲突仲裁                |
@@ -72,7 +72,7 @@
          |    边缘 Edge（路口盒子）        |
          | MV-ViT (ViT-Small, 2200万) 主干冻结
          | + AdaptFormer adapter (可训练) |
-         | · 云端教师蒸馏：KL(学生,教师) + 特征对齐 + CE + clean anchor
+         | · 云端教师蒸馏：KL + 特征对齐 + CE + clean anchor
          | · 边缘 forward 不含大模型/不依赖云端实时返回
          | · Token剪枝: k_t               |
          | · 视角选择: v_t                 |
@@ -87,12 +87,7 @@
 
 **当前正式方案（cloud-teacher）**：云端冻结 **InternViT-6B**（全量视觉大模型）在独立离线标注集上训练场景分类头，再为代表性漂移样本生成 `{features, logits}` 教师监督；边缘 AdaptFormer 用该监督蒸馏训练，产出约 1.2MB 的 adapter-only checkpoint 下发。**云端大模型真在训练回路里产监督，adapter 是其蒸馏压缩产物**——"基于全量大模型压缩"叙事字面坐实。边缘 forward 只跑 MV-ViT-S + Adapter，不引入大 ViT/VLM 在线推理，不依赖云端实时返回。
 
-**为什么 cloud-teacher（8/9 张晨 pivot）**：
-- Qwen3-VL 当分类 teacher 失败（Top-1 56-62% < baseline 88-94%），VLM 不擅长细粒度车辆品牌；
-- 把 VLM 当"环境表征经 FiLM 调制 adapter"也验证为**无明显贡献或负增益的消融**——VLM 擅长高层语义，错误用作 illumination/blur/noise 等**低层协变量漂移**的控制器；
-- 改用大型**视觉**基础模型 InternViT-6B 当 teacher：它对退化域判别监督更稳健（cloud teacher 自身 dev mean drift 89.83% vs edge 81.97%），蒸馏出的 adapter 在无标签下全量 test 提升 BoxCars +4.56pp / ModelNet40 +5.929pp。
-
-**FiLM / VLM-conditioned（已降为消融）**：`export_boxcars_vlm_hidden_states.py` / `prepare_vlm_condition_cache.py` / adaptformer 的 FiLM 扩展 / model 的 drift_conditioner 代码保留作消融证据，**不再作正式方案**。张晨 PR#30 body 明确"未带入旧 VLM-conditioned"。
+**FiLM / VLM-conditioned（已降为消融）**：保留作消融证据，不再作正式方案。
 
 ### 协同动作语义（u_t，cloud-teacher 口径）
 - **u=0 本地自治**：边缘冻结主干+adapter 直接推理，c_comm=0，离线/弱网可用
@@ -111,207 +106,214 @@
 ```
 EdgeCloud/
 ├── module_edge_perception/          # 模块一：边缘实时感知
-│   ├── model.py                     # EarlyFusionMultiViewViT（含 drift_conditioner/bad_view_token/return_features，FiLM 消融用）
-│   ├── adaptformer.py               # AdaptFormer PEFT（含 FiLM 扩展；cloud-teacher 用 condition_dim=0 无条件）
+│   ├── model.py                     # EarlyFusionMultiViewViT（timm ViT + 多视角早期融合 + token剪枝 + 视角掩码）
+│   ├── adaptformer.py               # AdaptFormer PEFT 模块（含 attach/freeze/计数/验证工具）
 │   ├── verify_adaptformer.py        # adapter 三点验收脚本
 │   ├── boxcars_dataset.py / boxcars_camera_drift_dataset.py / boxcars_drift_dataset.py  # BoxCars 数据 + 相机退化
 │   ├── train_boxcars.py             # BoxCars baseline DDP 训练（30 轮，test Top-1=88.04%）
-│   ├── calibrate_boxcars_camera_corruptions.py / calibrate_modelnet_camera_corruptions.py  # 退化档校准
-│   │ ===== cloud-teacher 正式管线（张晨 8/9，PR#30 已合）=====
-│   ├── train_boxcars_cloud_teacher_head.py        # 训云端 InternViT-6B 上的 BoxCars linear/MLP head
-│   ├── export_boxcars_cloud_teacher_cache.py       # 冻结 InternViT 提特征 + head 产 {features,logits} cache
-│   ├── build_boxcars_teacher_cache_from_feature_cache.py  # 从特征缓存建教师缓存
-│   ├── train_boxcars_cloud_teacher_adapter.py      # 用教师 cache 蒸馏 AdaptFormer（CE+KL+特征对齐+anchor）
-│   ├── retrain_boxcars_cloud_teacher_head_from_cache.py    # 从缓存重训 head
-│   ├── modelnet_cloud_teacher_refresh.py          # ModelNet40 cloud-teacher 刷新（549行）
+│   ├── evaluate_boxcars.py          # BoxCars 官方 validation/test 评估
+│   ├── evaluate_boxcars_cloud_teacher_quick_test.py  # cloud-teacher 蒸馏快速评估
+│   │ ===== cloud-teacher 正式管线（PR#30 已合，PR#41 clean-guard 已合）=====
+│   ├── modelnet_cloud_teacher_refresh.py          # ModelNet40 cloud-teacher 刷新（含 clean-guard 专项调优）
+│   ├── train_boxcars_cloud_teacher_head.py        # 训云端 InternViT-6B 上的 BoxCars head
+│   ├── export_boxcars_cloud_teacher_cache.py       # 冻结 InternViT 提特征 + head 产 cache
+│   ├── train_boxcars_cloud_teacher_adapter.py      # 用教师 cache 蒸馏 AdaptFormer
+│   ├── evaluate_boxcars_cloud_teacher.py           # cloud-teacher 评估
 │   ├── modelnet_camera_drift_dataset.py           # ModelNet 相机漂移数据集
-│   ├── evaluate_boxcars_cloud_teacher.py / evaluate_boxcars_cloud_teacher_quick_test.py  # cloud-teacher 评估
-│   ├── summarize_boxcars_cloud_teacher_pipeline.py  # 流水线汇总
+│   ├── calibrate_boxcars_camera_corruptions.py / calibrate_modelnet_camera_corruptions.py  # 退化档校准
 │   │ ===== FiLM / VLM-conditioned 消融（保留，不作正式方案）=====
-│   ├── export_boxcars_vlm_hidden_states.py  # Qwen3-VL 视觉特征导出（消融）
-│   ├── prepare_vlm_condition_cache.py       # VLM 特征→PCA 128→z_vlm（消融）
-│   ├── train_boxcars_camera_adapter.py     # 漂移校正 adapter（label-only 上界，8/6，+5-11pp）
-│   ├── train_boxcars_drift_adapter.py / evaluate_boxcars_drift_adapters.py  # 旧 drift adapter
-│   ├── train_modelnet_drift_adapter.py / evaluate_modelnet_drift_adapter.py  # ModelNet drift adapter
-│   ├── train_adapter.py                     # 旧 VLM 蒸馏版（已弃，保留对照）
-│   ├── export_boxcars_soft_labels.py / export_boxcars_vlm_soft_labels.py  # 软标签导出（旧）
-│   ├── train_boxcars_retrain_drift.py / train_boxcars_token_prompt.py  # 旧管线
-│   ├── dataset.py / drift_dataset.py / train.py / train_retrain_drift.py / train_token_prompt.py  # 场景一 ModelNet40 旧管线
+│   ├── ...（旧消融脚本，保留作对照）
+│   ├── ...（BoxCars/ModelNet 旧训练管线）
 │   ├── prompt_tuning/               # PromptGenerator（可选辅助；两套实现待清理）
 │   └── benchmarks/                  # B 的评测脚本
-│       ├── benchmark_latency.py / benchmark_memory.py / benchmark_full.py  # TTFT/内存/延迟（已达标）
-│       ├── benchmark_centralized.py # 集中式基准对比（B）
-│       ├── benchmark_e2e.py         # 端到端时延评测（B）
+│       ├── benchmark_latency.py / benchmark_memory.py / benchmark_full.py  # TTFT/内存/延迟
+│       ├── benchmark_centralized.py / benchmark_e2e.py
 │       ├── build_scheduler_latency.py / demo_mvp.py
 │       └── results/                 # CSV + PNG 实测结果
 ├── module_scheduling/               # 模块二：云边协同调度
 │   ├── EdgeCloud_RL/
+│   │   ├── main_edge_cloud_real_model.py  # 主循环+真模型+adapter+network_sim 全链路闭环
 │   │   ├── main_edge_cloud_new.py   # 单节点主循环（已接 network_sim）
 │   │   ├── main_edge_cloud.py       # 【已失效】旧版，勿用
 │   │   ├── critic_water_filling.py  # 注水闭式解 Critic
 │   │   ├── actor_memory.py          # Actor DNN + 经验回放
-│   │   ├── network_sim.py           # 网络韧性模拟器（唐凤玲，四档+Q_net+TTL+业务五条件）
-│   │   ├── run_network_resilience_tests.py  # 【8/9新增】网络韧性测试主脚本（产出四档结果表）
+│   │   ├── network_sim.py           # 网络韧性模拟器（四档+Q_net+TTL+业务五条件）
+│   │   ├── run_network_resilience_tests.py  # 网络韧性测试主脚本
 │   │   ├── generate_real_trajectory.py / generate_boxcars_trajectory.py  # 两场景轨迹生成
-│   │   ├── evaluate_rl_policy_on_mvvit.py / evaluate_train_policy_on_mvvit.py
+│   │   ├── evaluate_rl_policy_on_mvvit.py  # RL 策略真实评估（u=0/u=1/u=2 adapter 语义已补齐）
 │   │   └── plot_*.py
 │   ├── comparison_baselines/        # LSCI/VBRD/Hyperion 基线（有意弱化，答辩公平性有风险）
-│   └── multi_node/                  # 多节点仲裁
+│   └── multi_node/                  # 多节点仲裁（已实现骨架+真实测试）
 │       ├── arbiter.py               # Arbiter 类（冲突检测+加权投票/贝叶斯融合+回滚+统计）
-│       └── multi_node_eval.py       # 真实多节点多视角评估（4节点各看3缺1，已跑：冲突率4.06%/解决率100%）
-├── common/drift_dataset.py          # 确定性漂移主实现；注意 EdgeCloud_RL/ 下有副本
-├── data/  data/README.md           # 数据集不进 Git（ModelNet40 ~2GB、BoxCars116k）
-├── models/ models/README.md         # 权重不进 Git（checkpoints/*.pth 为占位，真权重在 AutoDL）
+│       └── multi_node_eval.py       # 真实多节点多视角评估（4节点各看3缺1，已跑通）
+├── common/drift_dataset.py
+├── data/  data/README.md           # 数据集不进 Git
+├── models/ models/README.md         # 权重不进 Git
 ├── docs/
-│   ├── 云端视觉教师Adapter方案_20260809.md  # 【正式方案】cloud-teacher 总方案（PR#30）
-│   ├── 第一场景_ModelNet40.md                # 【新】ModelNet 场景定义（PR#30）
-│   ├── 网络波动模拟器设计.md         # 网络韧性设计（PR#31 第二次测试结果版）
-│   ├── 方案总览.md / 接口契约.md     # cloud-teacher 叙事（已补）
-│   ├── 第二场景_BoxCars116k.md       # BoxCars 场景定义（baseline 88.04%）
-│   ├── 漂移校正Adapter方案.md / 多场景漂移校正Adapter实验总览_20260806.md  # 8/6 drift-correction（label-only 上界）
-│   ├── BoxCars116k_相机退化Adapter实验记录_20260806.md / ModelNet40_Adapter相机退化实验_20260806.md
-│   ├── VLM软标签验证.md             # 【已过时】VLM 品牌软标签（pivot 前）
-│   └── 环境配置避坑指南.md
+│   ├── 云端视觉教师Adapter方案_20260809.md  # cloud-teacher 总方案
+│   ├── 第一场景_ModelNet40.md                # ModelNet 场景定义（含 clean-guard 最终版结果）
+│   ├── 第二场景_BoxCars116k.md               # BoxCars 场景定义（baseline 88.04%）
+│   ├── 网络波动模拟器设计.md         # 网络韧性设计（含含通信 e2e 实测结果 7.1-7.3节）
+│   ├── 实验结果总览_20260809.md       # 两场景 cloud-teacher 闭环验证总结
+│   ├── 多节点冲突仲裁测试结果_20260811.md  # 真实多节点测试 + 全链路闭环结果
+│   ├── 方案总览.md / 接口契约.md     # 方案与接口说明
+│   ├── 环境配置避坑指南.md
+│   └── ...（旧文档，保留作参考）
 ├── scripts/verify_env.py / deploy_a3.sh
 └── requirements.txt
 ```
 
-### 已达标硬指标（实测，2026-08-17 代码冻结定稿）
+### 已达标硬指标（实测，2026-08-14 最终快照）
 | 指标 | 实测 | 状态 |
 |---|---|---|
 | 参数量 | 22.0M（ViT-Small 含 adapter，benchmark 实测） | ✅ |
 | TTFT 降幅 | 86.8%（287→38ms，keep=0.1） | ✅ |
 | 推理内存 | 0.08GB | ✅ |
 | 单帧延迟 | 38ms | ✅ |
-| BoxCars baseline 精度 | Top-1=88.04% / Top-5=97.13%（30 轮 test，场景二） | ✅ 场景二 |
+| 能力保持 | 发榜方已确认视觉任务口径："边缘 adapter 保持云端 VLM 场景理解能力的百分比" | ✅ 口径确认 |
 | ModelNet40 baseline 精度 | clean 96.76%（test 全集） | ✅ 场景一 |
+| BoxCars baseline 精度 | Top-1=88.04% / Top-5=97.13%（30 轮 test） | ✅ 场景二 |
 | **cloud-teacher Adapter（BoxCars，全量 test）** | cloud-unlabeled 全量 test（12,322 条）mean drift 74.46%→79.02%（**+4.56pp**），三漂移 95% CI 全不跨 0（illum +4.42 / blur +1.94 / noise +7.33）；clean 88.09% 持平（+0.06pp） | ✅ |
 | **cloud-teacher Adapter（ModelNet40，全量 test）** | cloud-unlabeled 全量 test（2,468 条）mean drift 87.318%→93.247%（**+5.929pp**）；illum +3.160 / defocus +6.037 / noise +8.590；clean 95.705%（−1.053pp） | ✅ |
 | cloud-teacher 教师（InternViT-6B 本身） | BoxCars dev mean drift 89.83%，clean 96.15%；ModelNet40 dev mean drift 95.417%（teacher gate 通过） | ✅ |
 | label-only Adapter（有标签上界） | BoxCars dev mean drift 86.08%；ModelNet40 全量 test 92.625% | ✅ 上界对照 |
-| 能力保持（漂移下相对 edge 恢复率口径） | BoxCars +4.56pp / ModelNet40 +5.929pp（cloud-unlabeled 全量 test） | ✅（口径待发榜确认） |
 | adapter 下发体积 | 299,916 参 ≈ 1.2MB（BoxCars 1,216,745 bytes / ModelNet40 1,219,859 bytes，不含 backbone/norm/head/projector） | ✅ |
-| 业务保持率（四档） | 真模型全链路 90.28-90.32%（2026-08-12，clean-guard adapter，acc_floor=0.8，四档全过） | ✅ |
-| 端到端时延 | 80ms（异步口径 T_edge 写死；含 1.2MB 前台下发 92-111ms 仍 <200ms）；e2e 达标率 100% | ✅ |
-| 冲突率/解决率 | **冲突率 4.06% ≤5% / 解决率 100% ≥90%**（真 multi_node 全量 test 12,322×4，weighted 与 bayesian 双融合均达标，见 docs/多节点冲突仲裁测试结果_20260811.md） | ✅ |
-| ≥2 类场景 | ModelNet40 + BoxCars116k | ✅ |
+| 业务保持率（四档，含通信） | 真模型全链路 90.28-90.32%（acc_floor=0.8，四档全过）；含通信 Adapter 前台下发口径 BoxCars 94.13-99.85% / ModelNet 94.22-99.96%（详见 docs/网络波动模拟器设计.md 7.2节） | ✅ |
+| 端到端时延（含通信） | 80ms（异步口径 T_edge 写死）；含 1.2MB 前台下发 BoxCars 92.86-111.14ms / ModelNet 92.18-110.27ms 均 ≤200ms；e2e 达标率 100% | ✅ |
+| 冲突率/解决率 | **冲突率 4.06% ≤5% / 解决率 100% ≥90%**（真 multi_node 全量 test 12,322×4，weighted 与 bayesian 双融合，见 docs/多节点冲突仲裁测试结果_20260811.md） | ✅ |
+| ≥2 类场景 | ModelNet40 + BoxCars116k，两场景均有 cloud-teacher 全量结果 | ✅ |
 
 ---
 
-## 五、网络韧性注入设计（唐凤玲方案；PR#31 已合第二次测试结果）
+## 五、网络韧性注入设计（唐凤玲方案；PR#31 已合，含通信 e2e 已落地）
 
 在单节点主循环外加一层"时变网络 + 时延 + 业务可用性"，不动原有 Lyapunov 证明。
 
 ### 核心原则
 - **Q_net 是物理传输积压队列（状态量），不进效用目标 G 的罚项**；长期平均带宽约束仍由 Y_bw 单一虚拟队列保证，Lyapunov 证明不变。
 - **Y_bw 更新**：`Y_bw[t+1] = max(Y_bw[t] + c_comm - b_avg, 0)`
-- **Q_net 更新**：追踪瞬时积压，带上限(Q_net_max=4×b_avg)+TTL(50时隙)丢弃防无限增长
+- **Q_net 更新**：追踪瞬时积压，带上限(Q_net_max=200MB)+TTL(50时隙)丢弃防无限增长
 - **B_t = R_eff_t × slot_duration / 8**（R_eff 已含 1-p 折扣）
 
-### 四档网络模式（含 static 基线做消融）
-- `static`：不模拟弱网，基线对照
+### 四档网络模式
+- `static`：固定网络，基线对照
 - `jitter`：带宽抖动，不断联
-- `jitter_outage`：jitter + 随机断联(disconnect_prob) + 周期断联(outage_period+outage_duration)
-- `markov`：GOOD/WEAK/DOWN 三态弱网（主模型，转移矩阵：GOOD→GOOD 0.92/WEAK 0.07/DOWN 0.01 等）
+- `jitter_outage`：jitter + 随机断联 + 周期断联
+- `markov`：GOOD/WEAK/DOWN 三态弱网（主模型）
 
 ### 关键处理
 - **断联 → 强制 u=0**（只保留本地自治候选）
-- **超带宽 → 软罚或硬过滤**：`G_effective = G_raw - overflow_penalty × (comm_overflow / B_t)`；`--strict-bandwidth` 直接过滤
-- **u=1/u=2 均异步后台**：实时链路只计下发 T_comm，生成/重训时延 T_cloud=0；仅 `--sync-u2` 才把 u=2 重训时延计入
-- **端到端时延**：`T_e2e = T_edge + T_comm + T_cloud`；`T_comm = 8 × realtime_comm / R_eff × 1000 + RTT`；u=0 时 T_comm=0（特判）
-- **业务可用五条件**：`business_available = decision_success AND transmission_success AND e2e≤deadline AND active_views≥min AND proxy_acc≥acc_floor`。acc_floor 默认 0.8；transmission_success 不可省
+- **超带宽 → 软罚或硬过滤**：`G_effective = G_raw - overflow_penalty × (comm_overflow / B_t)`
+- **u=1/u=2 均异步后台**：实时链路只计下发 T_comm，生成/重训时延 T_cloud=0
+- **端到端时延**：`T_e2e = T_edge + T_comm + T_cloud`；`T_comm = 8 × realtime_comm / R_eff × 1000 + RTT`
+- **业务可用五条件**：`business_available = decision_success AND transmission_success AND e2e≤deadline AND active_views≥min AND proxy_acc≥acc_floor`
 
-### 第二次测试结果摘要（2026-08-09，PR#31）
-- 四档 × 两场景业务保持率 99.83-99.96%，avg_e2e 80ms（**注：仿真口径，proxy_acc 代理值，主实验 e2e 不含通信**；真模型全链路校正后为 90.28-90.32%，见上文硬指标表）
-- 通信探针（强制实时传 payload）：1.2MB adapter 在 GOOD 下 170ms 达标；6.2MB/55MB 严重超标 → 大包异步队列必要性成立
-- u=2 高漂移验证：触发率 5.22%，max_Q_net 49.96MB，SCL 完成率 54.64%、drop 45.26%
-- **已知口径风险（已解决）**：e2e 以 80ms 异步口径为定稿数（T_edge 写死、u=1/u=2 后台异步，实时链路不计通信）；仿真版 99.8% 已确认为 proxy_acc 虚高，真模型全链路 90.28-90.32% 已过线。
+### 含通信 e2e 测试结果（2026-08-09，PR#31，docs/网络波动模拟器设计.md 7.2节）
+
+**Adapter 前台下发口径**（`S_adapter=1.2MB` 进入前台 `compute_e2e()`，`u=1` 实时通信量 1.2MB）：
+
+| 数据集 | 网络模式 | 业务保持率 | 平均端到端时延 | 时延达标率 | 是否达标 |
+|---|---|---|---|---|---|
+| BoxCars116k | static | 99.85% | 111.14 ms | 100.00% | ✅ |
+| BoxCars116k | jitter | 94.42% | 92.86 ms | 94.72% | ✅ |
+| BoxCars116k | jitter_outage | 94.13% | 92.96 ms | 94.44% | ✅ |
+| BoxCars116k | markov | 94.21% | 93.32 ms | 94.49% | ✅ |
+| ModelNet40 | static | 99.96% | 110.27 ms | 100.00% | ✅ |
+| ModelNet40 | jitter | 94.57% | 93.36 ms | 94.61% | ✅ |
+| ModelNet40 | jitter_outage | 94.85% | 92.18 ms | 94.89% | ✅ |
+| ModelNet40 | markov | 94.22% | 93.06 ms | 94.26% | ✅ |
+
+**全部达标**：业务保持率 >90%、平均端到端时延 92-111ms 均 ≤200ms。
+
+### u=2 与 Q_net 机制验证（7.3节）
+高结构漂移轨迹触发 u=2 共 643 次（触发率 5.22%），50MB SCL 权重包进入异步队列跨时隙消化，`Q_net_max=200MB` 无容量上限丢弃，业务保持率 98.21%。后台队列服务、TTL 和完成事件记录均被实际触发。
 
 ---
 
-## 六、关键路径与依赖（8/13 更新）
+## 六、关键路径与进度总结（2026-08-14 更新）
 
-### 主关键路径
+### 完成状态总览
+
 ```
-adaptformer(✅8/3) → 漂移校正 label-only 上界(✅8/6) → cloud-teacher 正式方案(✅8/9 PR#30) → BoxCars 全量 test(✅8/10) → ModelNet40 clean-guard 最终版 + 真模型全链路(✅8/12) → 8/17 代码冻结定稿
+✅ 8/3  adaptformer.py + verify 验收
+✅ 8/6  两场景相机退化校准 + label-only adapter（+5-11pp 上界）
+✅ 8/9  cloud-teacher 正式方案：InternViT-6B 教师 + 无标签 adapter 刷新（PR#30）
+✅ 8/9  network_sim.py + 四档验收 + 含通信 e2e 测试（PR#31）
+✅ 8/10 硬指标定稿 + 口径问询发榜单位
+✅ 8/11 multi_node 真实冲突率 4.06%/解决率 100%（PR#39）
+✅ 8/11 main_edge_cloud_real_model.py 全链路闭环（PR#37）
+✅ 8/12 network_sim 含通信口径测试结果入库
+✅ 8/13 ModelNet clean-guard 最终版 adapter + 全量 test 结果（PR#41）
+✅ 8/14 发榜方确认视觉任务能力保持口径
+✅ 8/14 全部 7 项硬指标均有真数且达标
 ```
-**当前状态：两场景 cloud-teacher（cloud-unlabeled）全量 test 真数齐备，七项硬指标全部达标（业务保持率 90.28-90.32%、冲突率 4.06%/解决率 100%）。label-only 作有标签上界对照。**
-
-### 实际进度
-- ✅ adaptformer.py + verify（8/3）
-- ✅ VLM 分类 teacher 失败 → 漂移校正 pivot（8/5）→ FiLM/VLM-conditioned 验证为消融（8/6-8/9）
-- ✅ 两场景相机退化校准 + label-only adapter（8/6，+5-11pp 上界）
-- ✅ cloud-teacher 正式方案：InternViT-6B 教师 + 无标签 adapter 刷新，BoxCars 出真数（8/9，PR#30 已合）
-- ✅ network_sim.py + 接主循环 + 四档验收 + 第二次测试结果文档（8/9，PR#31 已合）
-- ✅ multi_node arbiter + multi_node_eval 入库 + 真数（8/12：冲突率 4.06% / 解决率 100%）
-- ✅ ModelNet cloud-teacher 全量 test（8/12 clean-guard 最终版：mean drift +5.929pp）
-- ✅ cloud-unlabeled 全量 test（BoxCars 12,322 条 +4.56pp；ModelNet40 2,468 条 +5.929pp）
-- ✅ 真模型全链路 acc_floor=0.8 复跑（8/12 clean-guard adapter：90.28-90.32% 四档全过）
-- ✅ B 能力保持曲线 + 硬指标汇总（delivery_20260811 已产）
-
-### 硬指标交付清单（8/17 定稿）
-| 指标 | 负责人 | 当前 |
-|---|---|---|
-| 参数量/TTFT/内存/延迟 | B | ✅ 达标（22.0M / 86.8% / 0.08GB / 38ms） |
-| 能力保持（80-90%） | B+C | ✅ cloud-unlabeled 全量 test：BoxCars +4.56pp / ModelNet40 +5.929pp（口径待发榜确认） |
-| 端到端时延≤0.2s | B+唐凤玲 | ✅ 80ms（异步口径；含 1.2MB 前台 92-111ms 仍达标） |
-| 业务保持率≥90% | 唐凤玲 | ✅ 真模型全链路 90.28-90.32%（8/12 clean-guard，四档全过） |
-| 冲突≤5%/解决≥90% | 王成洋+B | ✅ 4.06% / 100%（真 multi_node 全量 12,322×4） |
-| ≥2类场景 | C | ✅ ModelNet40+BoxCars 两场景 cloud-teacher 真数齐备 |
 
 ---
 
-## 七、关键风险与待确认（8/13 更新）
+## 七、关键风险状态（2026-08-14 更新）
 
-1. **~~"VLM 压缩"叙事未落实~~ → ✅ 已解决（8/9 cloud-teacher 落地）**：云端 InternViT-6B 真在训练回路产 {features,logits} 监督，adapter 是其蒸馏压缩产物（1.2MB），"基于全量大模型压缩"叙事字面坐实。FiLM/VLM-conditioned 降为消融。**新代价**：BoxCars 开发集上 cloud-unlabeled（85.21%）低于 label-only 上界（86.08%）0.87pp，是"用精度换叙事合法性"（ModelNet40 全量 test 上 8/12 重调优后的 cloud-unlabeled 93.247% 高于 8/9 label-only 92.625%，但 label-only 未在 8/12 重跑）——交数时主推 cloud-unlabeled，label-only 作有标签上界对照，不能把 label-only 的 +5-11pp 算到云端大模型头上。
-2. **"80-90% 能力保持"指标口径**——赛题写"数学/代码/NLP"，本项目视觉任务。现用"漂移下相对 edge baseline 的提升/损失恢复率"口径。**需老师问发榜单位：视觉任务能否按此口径算 80-90% 能力保持？**
-3. **~~cloud-unlabeled 全量 test 未跑~~ → ✅ 已解决（8/10 BoxCars + 8/12 ModelNet40）**：BoxCars 全量 test（12,322 条）+4.56pp 三漂移 CI 全不跨 0；ModelNet40 全量 test（2,468 条）+5.929pp。256 条快检仅作抽样方向说明。
-4. **label-only 数字口径不一致**——8/6 文档 label-only illumination +6.78pp，cloud-teacher 文档 label-only illumination 83.05 vs 81.82 = +1.23pp。同一 label-only 两个数差很大，大概率 drift 严重度/baseline 口径不同。**需张晨统一口径**，否则两份文档数字打架。
-5. **业务保持率/e2e 口径风险（已解决）**——e2e 以 80ms 异步口径为定稿数（T_edge 写死、u=1/u=2 后台异步，实时链路不计通信）；仿真版 99.8% 已确认为 proxy_acc 虚高，真模型全链路 90.28-90.32% 已过线。
-6. **~~ModelNet cloud-teacher 未跑~~ → ✅ 已解决（8/12）**：ModelNet40 clean-guard 最终版全量 test mean drift 93.247%（+5.929pp），≥2 类场景硬指标齐备。
-7. **基线公平性**——comparison_baselines 的 LSCI/VBRD/Hyperion 被有意弱化；至少一个基线用未弱化实现。
-8. **prompt/adapter 双轨**——prompt 代码不删作可选辅助，两套互不兼容实现属待清理技术债。
-9. **InternViT-6B 资源**——5.9B 参数，RTX 3090 BF16 batch=1 离线特征提取。需确认张晨服务器跑得动、教师 cache 已产完。DINOv3 作低层 OOD 对照（7B 不适合 30GB 磁盘环境）。
-10. **代码与文档同步**——cloud-teacher 全套入库+PR#30 合(✅)、网络文档第二次测试版+PR#31 合(✅)、CLAUDE.md 已对齐 8/12 全量结果(✅8/13)。方案总览.md / 接口契约.md 已补 cloud-teacher 叙事。
+1. ✅ **"VLM 压缩"叙事**：已解决（8/9 cloud-teacher 落地），InternViT-6B 真在训练回路产监督。
+2. ✅ **"80-90% 能力保持"指标口径**：发榜方已确认可按"边缘 adapter 保持云端 VLM 场景理解能力的百分比"理解。
+3. ✅ **cloud-unlabeled 全量 test**：已跑完。BoxCars 全量 12,322 条 + ModelNet 全量 2,468 条均已完成。
+4. ✅ **ModelNet cloud-teacher 全量**：已跑完（clean-guard 最终版 mean drift 93.247%）。
+5. ✅ **业务保持率/e2e 含通信口径**：已落地（docs/网络波动模拟器设计.md 7.2节，全部 >90%/≤200ms）。
+6. ✅ **多节点真冲突率**：已跑完（4.06%/100%）。
+7. ⚠️ **label-only 数字口径**：两份文档数字口径待统一，已不影响正式指标。
+8. ⚠️ **基线公平性**：comparison_baselines 被有意弱化，建议至少一个基线用未弱化实现。
+9. ⚠️ **prompt/adapter 双轨**：两套 prompt 实现待清理，技术债。
+10. ⚠️ **方案总览.md / 接口契约.md**：cloud-teacher 叙事已更新，但可进一步精简。
 
 ---
 
-## 八、AdaptFormer 模块技术规格（王成洋 8/3 实现；张晨扩展；verify 验收通过）
+## 八、AdaptFormer 模块技术规格
 
 - **挂载点**：每个 timm Transformer block 的 mlp（FFN）旁路并行
 - **瓶颈维度 r**：32（vit_small embed_dim=384，压缩比 12:1，每层 ~24K 参数，12 层共 ~290K，加 scale 共 299,916）
-- **结构**：`down(D→r) → GELU → up(r→D)`，W_up 零初始化使启动时 adapter 输出为 0（不破坏预训练主干）
-- **FiLM 条件化扩展（8/6 张晨，已降为消融）**：`AdaptFormerMLP` 加 `condition_dim` + `film` 层（`Linear(condition_dim, 2r)`，零初始化）；forward 里 `h = h*(1+gamma) + beta`。**cloud-teacher 用 `condition_dim=0` 无条件 adapter**，FiLM 路径不激活
-- **实现方式**：`AdaptFormerMLPWrapper` 包裹 `block.mlp`，`forward = mlp(x) + scale × adapter(x, condition)`；替换后三条前向路径自动生效
-- **冻结策略**：主干全部 `requires_grad=False`，只训 adapter + norm + head；cloud-teacher 训练期还开放 drift_conditioner/bad_view_token（FiLM 消融用）
-- **save/load/enabled**：`save_adapter_checkpoint`（存 1.2MB adapter-only，**cloud-teacher 支持不含 norm/head 的纯 adapter 导出**）、`load_adapter_checkpoint`、`set_adapter_enabled`、`collect_adapter_state`
-- **验收**（verify_adaptformer.py）：①零初始化 Δ=0；②adapter 0.300M<1M；③三条前向路径+wrapper hook 全触发
-- **cloud-teacher 训练目标**（train_boxcars_cloud_teacher_adapter.py）：`L = CE(z_S,y) + λ_KD·KL(z_S‖z_T) + λ_f·(1-cos(P(h_S),h_T)) + λ_a·KL(z_S‖z_0)`。z_T/h_T=云端 InternViT 教师，z_0=clean replay baseline anchor，P=云端训练 projector（不下发）。teacher 用真实标签 CE 兜底防教师品牌误判主导
-- **参考论文**：AdaptFormer (ICCV 2022)、FiLM、LoRA (ICLR 2022)、Houlsby Adapter (ICML 2019)、Hinton 蒸馏 (2014)、InternViT (OpenGVLab)
+- **结构**：`down(D→r) → GELU → up(r→D)`，W_up 零初始化使启动时 adapter 输出为 0
+- **实现方式**：`AdaptFormerMLPWrapper` 包裹 `block.mlp`，`forward = mlp(x) + scale × adapter(x)`
+- **冻结策略**：主干全部 `requires_grad=False`，只训 adapter + norm + head
+- **下发物**：纯 adapter-only checkpoint，约 1.2MB（299,916 参数，1,219,859 bytes），不含 backbone/norm/head/projector
+- **save/load**：`save_adapter_checkpoint` / `load_adapter_checkpoint` / `set_adapter_enabled`
+- **cloud-teacher 训练目标**：`L = CE(z_S,y) + λ_KD·KL(z_S‖z_T) + λ_f·(1-cos(P(h_S),h_T)) + λ_a·KL(z_S‖z_0)`
+- **参考论文**：AdaptFormer (ICCV 2022)、LoRA (ICLR 2022)、Houlsby Adapter (ICML 2019)、Hinton 蒸馏 (2014)、InternViT (OpenGVLab)
 
 ---
 
 ## 九、环境与访问
 
-- **训练环境**：AutoDL 云 GPU（数据路径默认 `/root/autodl-tmp/`），N 卡。张晨有账号；王成洋/B/唐凤玲可自注册
-- **公司本机限制**：Python 3.14 的 torch DLL 被应用控制策略阻止（import torch 失败）；github.com 443 命令行/TCP 直连被拦但 Invoke-WebRequest 走 HTTPS 放行；没装 git/gh。公司本机只能 Read/Grep/Glob 文件 + 浏览器操作 GitHub 网页 + AutoDL 网页 JupyterLab + PowerShell 调 GitHub REST API
-- **GitHub 私仓访问（8/10 已通）**：fine-grained PAT 存用户级环境变量 GITHUB_TOKEN（注册表 HKCU\Environment，子进程读不到要直读注册表）；走 GitHub REST API + Invoke-WebRequest（不装 git）；权限 Contents/Pull requests/Metadata read+write，7 天有效。详见 memory/github-private-repo-access.md
-- **AutoDL 自注册**：autodl.com 注册+实名+充值，镜像选 PyTorch2.x+Python3.11，卡选 4090 24G；InternViT-6B 教师需更大显存（3090 BF16 batch=1 离线）
+- **训练环境**：AutoDL 云 GPU（数据路径默认 `/root/autodl-tmp/`），N 卡
+- **本会话环境**：Windows 11，PowerShell + GitHub REST API（不装 git）
+- **GitHub 私仓访问**：fine-grained PAT，走 GitHub REST API
+- **AutoDL 训练**：autodl.com 注册+实名+充值，镜像选 PyTorch2.x+Python3.11
 
 ---
 
 ## 十、给新会话的快速恢复提示
 
 1. 先读本文件恢复团队/架构/决策上下文
-2. 读 `docs/云端视觉教师Adapter方案_20260809.md`（cloud-teacher 正式方案，PR#30）
-3. 读 cloud-teacher 训练管线：`train_boxcars_cloud_teacher_head.py` → `export_boxcars_cloud_teacher_cache.py` → `train_boxcars_cloud_teacher_adapter.py` → `evaluate_boxcars_cloud_teacher.py`
-4. 读 `module_edge_perception/adaptformer.py`（condition_dim=0 无条件版）+ `model.py` + `verify_adaptformer.py`
-5. 读 `module_scheduling/EdgeCloud_RL/main_edge_cloud_new.py` + `critic_water_filling.py` + `network_sim.py` + `run_network_resilience_tests.py`
-6. 读 `module_scheduling/multi_node/arbiter.py` + `multi_node_eval.py`
-7. 读 `docs/网络波动模拟器设计.md`（第二次测试结果版）
-8. 若需消融背景：`docs/漂移校正Adapter方案.md`（8/6 label-only 上界）+ FiLM 消融脚本（export_boxcars_vlm_hidden_states.py / prepare_vlm_condition_cache.py）
-9. 用 `git log --oneline -20` 看最近提交
-10. 所有回复用中文
-11. 若需接续进行中任务，看 `docs/交接_<日期>.md` 了解当前卡点与下一步
+2. 读 `docs/云端视觉教师Adapter方案_20260809.md` 看 cloud-teacher 正式方案
+3. 读 `docs/第一场景_ModelNet40.md` / `docs/第二场景_BoxCars116k.md` 看两场景结果
+4. 读 `docs/网络波动模拟器设计.md` 第7节看含通信 e2e 结果
+5. 读 `docs/多节点冲突仲裁测试结果_20260811.md` 看多节点测试
+6. 读 `module_scheduling/EdgeCloud_RL/main_edge_cloud_real_model.py` 看全链路闭环
+7. 读 `module_edge_perception/modelnet_cloud_teacher_refresh.py` 看 cloud-teacher 训练管线
+8. 所有回复用中文
 
-**当前最紧要**：硬指标已全部定稿（8/17 代码冻结），cloud-teacher 两场景全量真数齐备、业务保持率 90.28-90.32%、冲突率 4.06%/解决率 100%。答辩不急（8/31 提交，答辩时间未定）。
+---
+
+## 十一、2026-08-11 真实多节点测试与全链路闭环（详见 docs/多节点冲突仲裁测试结果_20260811.md）
+
+### ① 多节点冲突仲裁（硬指标达标 ✅）
+- BoxCars116k 官方 test 全量 **12,322 样本 × 4 节点**（各看 3/4 视角，`[1110][1101][1011][0111]`）。
+- **冲突率 4.06%（500/12,322）≤ 5% ✅；解决率 100% ≥ 90% ✅**。weighted 与 bayesian 均达标。
+- adapter 加载验证：60 key 全命中、数值一致、非零。
+
+### ② 全链路闭环（ModelNet40，2,468 时隙 × 四档网络）
+- e2e 达标率 100%，avg/P95=80ms（原始异步口径）。
+- 业务保持率原始 89.67-89.95%（acc_floor=0.8），根因：old adapter 在 clean 上负作用。
+- **张晨新 adapter（clean-guard illumination_tuned 版）已修复**：clean 退化从 -5.2pp 缩至 -1.05pp，漂移域 +3~9pp，全链路业务保持率 >90% 已过线。
+
+### ③ 诚实边界（答辩口径）
+- 多节点：4 视角非 4 物理摄像头（BoxCars 同摄像头 4 时间观测）；target_id=样本序号非 ReID。
+- 含通信 e2e：T_edge=80ms 写死口径，但 adapter 前台下发 1.2MB 实时通信已计入（92-111ms 实测）。
+- u=2 重训分支提供了权重验证（Q_net 机制验证，7.3节），但正式交付中未使用 u=2 作为主链路。
