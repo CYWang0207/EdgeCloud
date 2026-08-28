@@ -429,6 +429,32 @@ body[data-page-theme="dark"] .closing-copy > p:last-child { max-width: 760px; ma
   }
 }
 
+@media (min-width: 3000px) and (min-height: 1300px),
+       (min-width: 1600px) and (min-height: 760px) and (min-resolution: 1.5dppx) {
+  :root {
+    --hero-title-size: 10rem;
+    --hero-subtitle-size: 2.25rem;
+    --hero-command-height: 4.25rem;
+    --hero-command-font: 1.125rem;
+    --hero-github-icon: 2.25rem;
+    --hero-github-small: .8125rem;
+    --hero-github-strong: 1rem;
+    --hero-action-gap: 1.25rem;
+    --hero-partner-seu: 8rem;
+    --hero-partner-inspur: 13rem;
+    --hero-partner-gap: 2rem;
+  }
+  .site-header { height: 116px; padding: 0 72px 18px; }
+  .brand { font-size: 2rem; }
+  .menu-toggle { min-width: 132px; height: 56px; gap: 18px; }
+  .menu-toggle b { font-size: 1.25rem; }
+  .menu-lines { width: 32px; gap: 7px; }
+  .hero { min-height: 100svh; }
+  .hero-content { max-width: none; margin: 0; padding: 15vh 48vw 190px 12vw; }
+  .hero-subtitle { margin-top: 34px; margin-bottom: 44px; }
+  .hero-partners { left: 12vw; bottom: 40px; }
+}
+
 @media (max-width: 1250px) {
   :root {
     --hero-title-size: 5.125rem;
