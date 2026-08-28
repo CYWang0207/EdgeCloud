@@ -13,6 +13,18 @@
   --red: #ff6d65;
   --max: 1500px;
   --radius: 4px;
+  --hero-gutter: 40px;
+  --hero-title-size: 5.75rem;
+  --hero-subtitle-size: 1.5rem;
+  --hero-command-height: 3rem;
+  --hero-command-font: .8125rem;
+  --hero-github-icon: 1.5625rem;
+  --hero-github-small: .5625rem;
+  --hero-github-strong: .75rem;
+  --hero-action-gap: .875rem;
+  --hero-partner-seu: 5.125rem;
+  --hero-partner-inspur: 9rem;
+  --hero-partner-gap: 1.125rem;
 }
 
 * { box-sizing: border-box; }
@@ -85,26 +97,26 @@ body.menu-open { overflow: hidden; }
 .hero { position: relative; min-height: 92svh; overflow: hidden; border-bottom: 1px solid var(--line); }
 .hero-media { position: absolute; inset: 0; background: url("assets/hero-traffic.webp") center 58% / cover no-repeat; }
 .hero-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.76) 0%, rgba(0,0,0,.57) 40%, rgba(0,0,0,.15) 72%, rgba(0,0,0,.06) 100%); box-shadow: inset 0 -190px 130px rgba(0,0,0,.68); }
-.hero-content { position: relative; z-index: 2; max-width: var(--max); margin: 0 auto; padding: 18vh 42% 120px 40px; }
+.hero-content { position: relative; z-index: 2; max-width: var(--max); margin: 0 auto; padding: 18vh 42% 120px var(--hero-gutter); }
 .eyebrow { margin: 0 0 18px; color: var(--cyan); font: 700 11px/1.3 monospace; text-transform: uppercase; }
-.hero h1 { margin: 0; font-size: 92px; line-height: .94; font-weight: 700; }
-.hero-partners { position: absolute; z-index: 2; left: 40px; bottom: 20px; display: flex; align-items: center; gap: 18px; }
-.partner-logo { width: 170px; height: 94px; display: grid; place-items: center; flex: 0 0 auto; background: transparent; border: 0; transition: opacity .2s, transform .2s; }
+.hero h1 { margin: 0; font-size: var(--hero-title-size); line-height: .94; font-weight: 700; }
+.hero-partners { position: absolute; z-index: 2; left: var(--hero-gutter); bottom: 20px; display: flex; align-items: center; gap: var(--hero-partner-gap); }
+.partner-logo { width: clamp(7rem, 11vw, calc(var(--hero-partner-inspur) + 1.75rem)); height: calc(var(--hero-partner-seu) + .75rem); display: grid; place-items: center; flex: 0 0 auto; background: transparent; border: 0; transition: opacity .2s, transform .2s; }
 .partner-logo:hover, .partner-logo:focus-visible { opacity: .78; transform: translateY(-2px); }
 .partner-logo:focus-visible { outline: 1px solid rgba(255,255,255,.72); outline-offset: 5px; }
-.partner-logo.inspur img { width: 144px; height: auto; }
-.partner-logo.seu { width: 94px; }
-.partner-logo.seu img { width: 82px; height: 82px; object-fit: cover; border-radius: 50%; }
-.hero-subtitle { margin: 26px 0 34px; font-size: 24px; line-height: 1.45; color: #e6eaec; }
-.hero-actions { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
-.primary-command { display: inline-flex; align-items: center; gap: 18px; min-height: 48px; padding: 0 18px; border: 1px solid var(--white); font-weight: 700; font-size: 13px; transition: background .2s, color .2s; }
+.partner-logo.inspur img { width: var(--hero-partner-inspur); max-width: 100%; height: auto; }
+.partner-logo.seu { width: calc(var(--hero-partner-seu) + .75rem); }
+.partner-logo.seu img { width: var(--hero-partner-seu); height: var(--hero-partner-seu); object-fit: cover; border-radius: 50%; }
+.hero-subtitle { margin: 26px 0 34px; font-size: var(--hero-subtitle-size); line-height: 1.45; color: #e6eaec; }
+.hero-actions { display: flex; align-items: stretch; gap: var(--hero-action-gap); flex-wrap: wrap; }
+.primary-command { display: inline-flex; align-items: center; gap: clamp(.75rem, 1.4vw, 1.125rem); min-height: var(--hero-command-height); padding: 0 clamp(.875rem, 1.4vw, 1.125rem); border: 1px solid var(--white); font-weight: 700; font-size: var(--hero-command-font); transition: background .2s, color .2s; }
 .primary-command:hover { background: var(--white); color: var(--black); }
-.github-hero-link { min-height: 48px; display: inline-flex; align-items: center; gap: 12px; padding: 8px 14px; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.36); backdrop-filter: blur(10px); transition: background .2s, border-color .2s; }
+.github-hero-link { min-height: var(--hero-command-height); display: inline-flex; align-items: center; gap: clamp(.625rem, 1vw, .75rem); padding: clamp(.4375rem, .6vw, .625rem) clamp(.75rem, 1.1vw, 1rem); background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.36); backdrop-filter: blur(10px); transition: background .2s, border-color .2s; }
 .github-hero-link:hover { background: rgba(255,255,255,.12); border-color: #fff; }
-.github-hero-link svg { width: 25px; height: 25px; }
+.github-hero-link svg { width: var(--hero-github-icon); height: var(--hero-github-icon); }
 .github-hero-link span { display: grid; gap: 3px; }
-.github-hero-link small { color: #b7b7b7; font-size: 9px; }
-.github-hero-link strong { font-size: 12px; }
+.github-hero-link small { color: #b7b7b7; font-size: var(--hero-github-small); }
+.github-hero-link strong { font-size: var(--hero-github-strong); }
 .section { max-width: none; margin: 0; padding: 112px 40px; }
 .section-inner { max-width: calc(var(--max) - 80px); margin: 0 auto; }
 .section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 30px; padding-bottom: 24px; border-bottom: 1px solid var(--line-strong); }
@@ -384,10 +396,12 @@ body[data-page-theme="dark"] main > .closing-section .eyebrow { color: #fff; }
 body[data-page-theme="light"] .closing-copy > p:last-child,
 body[data-page-theme="dark"] .closing-copy > p:last-child { max-width: 760px; margin: 26px 0 54px; color: #b9b9b9; font-size: 17px; line-height: 1.6; }
 .team-band { display: grid; grid-template-columns: 1fr 1.5fr .8fr; gap: 54px; padding-top: 26px; padding-bottom: 26px; }
-.team-band > div { min-height: 100px; padding: 10px 0; }
+.team-band > div, .team-band > a { min-height: 100px; padding: 10px 0; }
 .team-band small { display: block; color: #a5a5a5; font: 9px/1 monospace; }
 .team-band strong { display: block; margin-top: 18px; font-size: 15px; line-height: 1.6; }
 .school-identity { display: flex; align-items: center; gap: 16px; transform: translateY(-12px); }
+.school-identity:hover { opacity: .78; }
+.school-identity:focus-visible { outline: 1px solid #fff; outline-offset: 6px; }
 .school-identity img { width: 74px; height: 74px; flex: 0 0 auto; object-fit: cover; border-radius: 50%; background: #fff; }
 .school-identity > span { display: grid; align-content: center; }
 .school-identity strong { margin-top: 0; }
@@ -400,19 +414,47 @@ body[data-page-theme="dark"] .closing-copy > p:last-child { max-width: 760px; ma
 .footer-github strong { font-size: 23px; }
 .footer-github > b { font-size: 28px; font-weight: 400; }
 
+@media (min-width: 1600px) and (min-height: 800px) {
+  :root {
+    --hero-title-size: 7rem;
+    --hero-subtitle-size: 1.75rem;
+    --hero-command-height: 3.5rem;
+    --hero-command-font: .9375rem;
+    --hero-github-icon: 1.875rem;
+    --hero-github-small: .625rem;
+    --hero-github-strong: .875rem;
+    --hero-partner-seu: 6.25rem;
+    --hero-partner-inspur: 10.75rem;
+    --hero-partner-gap: 1.5rem;
+  }
+}
+
 @media (max-width: 1250px) {
+  :root {
+    --hero-title-size: 5.125rem;
+    --hero-subtitle-size: 1.375rem;
+    --hero-partner-seu: 4.375rem;
+    --hero-partner-inspur: 7.625rem;
+    --hero-partner-gap: .875rem;
+  }
   .hero-content { padding-right: 32%; }
-  .hero h1 { font-size: 82px; }
-  .hero-partners { left: 40px; bottom: 150px; gap: 14px; }
-  .partner-logo { width: 142px; height: 82px; }
-  .partner-logo.inspur img { width: 122px; }
-  .partner-logo.seu { width: 82px; }
-  .partner-logo.seu img { width: 70px; height: 70px; }
+  .hero-partners { bottom: 150px; }
 }
 
 @media (max-width: 1050px) {
+  :root {
+    --hero-title-size: 4.5rem;
+    --hero-subtitle-size: 1.25rem;
+    --hero-command-height: 2.875rem;
+    --hero-command-font: .75rem;
+    --hero-github-icon: 1.375rem;
+    --hero-github-strong: .6875rem;
+    --hero-partner-seu: 4rem;
+    --hero-partner-inspur: 6.875rem;
+    --hero-partner-gap: .75rem;
+  }
   .site-header { grid-template-columns: 1fr auto 1fr; }
-  .hero-content { padding-right: 25%; }.hero h1 { font-size: 72px; }.hero-partners { left: 40px; bottom: 146px; gap: 12px; }.partner-logo { width: 128px; height: 74px; }.partner-logo.inspur img { width: 110px; }.partner-logo.seu { width: 74px; }.partner-logo.seu img { width: 64px; height: 64px; }
+  .hero-content { padding-right: 25%; }.hero-partners { bottom: 146px; }
   .demo-shell { grid-template-columns: 1fr; grid-template-areas: "camera" "telemetry" "timeline" "controls"; }
   .camera-zone { border-right: 0; }.telemetry { border-top: 1px solid var(--line-strong); }.event-log { max-height: 140px; }
   .knowledge-flow { grid-template-columns: 1fr; }
@@ -426,10 +468,24 @@ body[data-page-theme="dark"] .closing-copy > p:last-child { max-width: 760px; ma
 }
 
 @media (max-width: 720px) {
+  :root {
+    --hero-gutter: 20px;
+    --hero-title-size: 3.4375rem;
+    --hero-subtitle-size: 1.125rem;
+    --hero-command-height: 2.875rem;
+    --hero-command-font: .75rem;
+    --hero-github-icon: 1.375rem;
+    --hero-github-small: .5rem;
+    --hero-github-strong: .6875rem;
+    --hero-action-gap: .625rem;
+    --hero-partner-seu: 2.875rem;
+    --hero-partner-inspur: 5.375rem;
+    --hero-partner-gap: .75rem;
+  }
   .site-header { height: 68px; padding: 0 16px 10px; }.brand { font-size: 18px; }.menu-toggle { min-width: 48px; }.menu-toggle b { display: none; }
   .site-menu { padding: 22px 20px 26px; }.site-menu nav span { font-size: 23px; }
   .hero { min-height: 82svh; }.hero-media { background-position: 62% center; }.hero-shade { background: linear-gradient(180deg, rgba(0,0,0,.32) 0%, rgba(0,0,0,.54) 50%, rgba(0,0,0,.86) 100%); box-shadow: none; }
-  .hero-content { padding: 15vh 20px 190px; }.hero h1 { font-size: 55px; }.hero-partners { left: 20px; bottom: 44px; gap: 12px; }.partner-logo { width: 100px; height: 54px; }.partner-logo.inspur img { width: 86px; }.partner-logo.seu { width: 54px; }.partner-logo.seu img { width: 46px; height: 46px; }.hero-subtitle { font-size: 18px; }.hero-actions { align-items: flex-start; flex-direction: column; }
+  .hero-content { padding: 15vh var(--hero-gutter) 190px; }.hero-partners { bottom: 44px; }.hero-actions { align-items: flex-start; flex-direction: column; }
   .section { padding: 76px 16px; }.section h2 { font-size: 32px; }.section-heading { align-items: flex-start; flex-direction: column; }.section-lead { font-size: 15px; }.film-frame { min-height: 0; }
   .replay-note { font-size: 15px; }.mode-row { align-items: flex-start; flex-direction: column; padding: 14px 0; gap: 10px; }
   .modelnet-case-picker { width: 100%; min-width: 0; align-items: flex-start; flex-direction: column; }.modelnet-evidence-note { flex-direction: column; gap: 5px; }
@@ -442,6 +498,31 @@ body[data-page-theme="dark"] .closing-copy > p:last-child { max-width: 760px; ma
   .knowledge-stage { padding: 14px; }.knowledge-stage-head { min-height: 72px; }.knowledge-stage-head h3 { font-size: 15px; }.knowledge-stage-head b { font-size: 9px; }.diagnosis-key, .update-facts { font-size: 7px; }
   .evidence-grid { grid-template-columns: 1fr; }.evidence-item { min-height: 0; padding: 20px; }.recovery-row { grid-template-columns: 1fr 18px 1fr; }.recovery-row > strong { grid-column: 1 / -1; }.chart-group { grid-template-columns: 70px 1fr; }.chart-group > div:last-child { grid-column: 2; }.metric-summary { align-items: flex-start; flex-direction: column; }.metric-summary p { text-align: left; }.split-metric strong { font-size: 36px; }
   .closing-section { padding-top: 76px; }.closing-copy, .team-band { padding-left: 16px; padding-right: 16px; }.closing-copy h2 { font-size: 38px; }.school-identity { transform: none; }.footer-github { margin: 42px 16px 0; min-height: 104px; grid-template-columns: auto 1fr; padding: 18px; }.footer-github svg { width: 38px; height: 38px; }.footer-github strong { font-size: 17px; }.footer-github > b { display: none; }
+}
+
+@media (max-width: 420px) {
+  :root {
+    --hero-gutter: 16px;
+    --hero-title-size: 2.75rem;
+    --hero-subtitle-size: 1rem;
+    --hero-partner-seu: 2.5rem;
+    --hero-partner-inspur: 4.75rem;
+  }
+  .hero-content { padding-top: 13vh; }
+  .primary-command, .github-hero-link { max-width: 100%; }
+}
+
+@media (min-width: 721px) and (max-height: 760px) {
+  :root {
+    --hero-title-size: 4.5rem;
+    --hero-subtitle-size: 1.25rem;
+    --hero-command-height: 2.75rem;
+    --hero-partner-seu: 3.75rem;
+    --hero-partner-inspur: 6.75rem;
+  }
+  .hero-content { padding-top: 16vh; padding-bottom: 100px; }
+  .hero-subtitle { margin-top: 18px; margin-bottom: 24px; }
+  .hero-partners { bottom: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
