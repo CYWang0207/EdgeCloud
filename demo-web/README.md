@@ -2,6 +2,23 @@
 
 离线静态演示雏形。直接打开 `index.html` 即可使用，无需安装依赖或启动服务。
 
+## 线上访问
+
+- 演示网站：<https://cywang0207.github.io/EdgeCloud-Demo/>
+- 公共网页仓库：<https://github.com/CYWang0207/EdgeCloud-Demo>
+
+项目代码继续保存在私有 `EdgeCloud` 仓库中，公共仓库只发布 `demo-web` 目录下的网站文件。
+
+## 发布更新
+
+在 `EdgeCloud` 仓库提交网页修改后，从仓库根目录执行：
+
+```bash
+git subtree push --prefix=demo-web https://github.com/CYWang0207/EdgeCloud-Demo.git main
+```
+
+GitHub Pages 会在推送后自动重新构建，通常一分钟内更新线上版本。
+
 ## 已实现
 
 - 电影化项目首页
