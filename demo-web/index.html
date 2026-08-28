@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="EdgeCloud 端边云协同感知与决策系统演示雏形">
+  <title>EdgeCloud | 端边云协同感知与决策</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="icon-defs" aria-hidden="true">
+    <symbol id="github-icon" viewBox="0 0 24 24">
+      <path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.57-.29-5.28-1.29-5.28-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.96 10.96 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.25c0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .7Z"/>
+    </symbol>
+  </svg>
+
+  <header class="site-header" id="top">
+    <button class="menu-toggle" id="menuToggle" type="button" aria-controls="siteMenu" aria-expanded="false">
+      <span class="menu-lines" aria-hidden="true"><i></i><i></i><i></i></span>
+      <b>菜单</b>
+    </button>
+    <a class="brand" href="#top" aria-label="返回页面顶部"><span>EdgeCloud</span></a>
+  </header>
+
+  <div class="menu-scrim" id="menuScrim" hidden></div>
+  <aside class="site-menu" id="siteMenu" aria-label="网站菜单" aria-hidden="true" inert>
+    <div class="menu-topline">
+      <span>EDGE CLOUD / XH-202606</span>
+      <button class="menu-close" id="menuClose" type="button" aria-label="关闭菜单">×</button>
+    </div>
+    <nav>
+      <a href="#film"><small>01</small><span>宣传片</span></a>
+      <a href="#system"><small>02</small><span>系统回放</span></a>
+      <a href="#evidence"><small>03</small><span>亮点数据</span></a>
+      <a href="#team"><small>04</small><span>团队组成</span></a>
+    </nav>
+    <a class="menu-github" href="https://github.com/CYWang0207/EdgeCloud" target="_blank" rel="noreferrer">
+      <svg aria-hidden="true"><use href="#github-icon"></use></svg>
+      <span><small>PUBLIC REPOSITORY</small><strong>CYWang0207 / EdgeCloud</strong></span>
+    </a>
+  </aside>
+
+  <main>
+    <section class="hero" data-page-theme="dark" aria-labelledby="hero-title">
+      <div class="hero-media" role="img" aria-label="智能交通监控概念场景"></div>
+      <div class="hero-shade"></div>
+      <div class="hero-content">
+        <h1 id="hero-title">EdgeCloud</h1>
+        <p class="hero-subtitle">面向端边云协同推理的<br>分布式感知与全局优化决策系统</p>
+        <div class="hero-actions">
+          <a class="primary-command" href="#film">观看项目宣传片 <span aria-hidden="true">↓</span></a>
+          <a class="github-hero-link" href="https://github.com/CYWang0207/EdgeCloud" target="_blank" rel="noreferrer">
+            <svg aria-hidden="true"><use href="#github-icon"></use></svg>
+            <span><small>查看公共代码仓</small><strong>GitHub / EdgeCloud</strong></span>
+          </a>
+        </div>
+      </div>
+      <div class="hero-partners" aria-label="相关机构">
+        <a class="partner-logo seu" href="https://www.seu.edu.cn/" target="_blank" rel="noreferrer" title="访问东南大学官网">
+          <img src="assets/seu-logo.jpg" alt="东南大学">
+        </a>
+        <a class="partner-logo inspur" href="https://www.inspur.com/lcjtww/2521494/index.html" target="_blank" rel="noreferrer" title="访问浪潮中文官网">
+          <img src="assets/inspur-logo.png" alt="浪潮集团">
+        </a>
+      </div>
+    </section>
+
+    <section class="section film-section" id="film" data-page-theme="light" aria-labelledby="film-title">
+      <div class="section-inner">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 / PROJECT FILM · 项目宣传片</p>
+            <h2 id="film-title">从一次识别漂移，看见端—边—云如何协同</h2>
+          </div>
+        </div>
+        <p class="section-lead">宣传片以多路摄像头追踪同一车辆为主线，直观呈现边缘感知、漂移发现、云端知识蒸馏与 Adapter 下发恢复的完整过程。</p>
+        <div class="film-frame">
+          <video class="project-film" controls playsinline preload="metadata" poster="assets/hero-traffic.webp" aria-label="EdgeCloud 项目宣传片">
+            <source src="assets/edgecloud-project-film.mp4" type="video/mp4">
+            您的浏览器暂不支持视频播放。可<a href="assets/edgecloud-project-film.mp4">下载宣传片</a>后观看。
+          </video>
+        </div>
+      </div>
+    </section>
+
+    <section class="section system-section" id="system" data-page-theme="dark" aria-labelledby="system-title">
+      <div class="section-inner">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">02 / LIVE SYSTEM REPLAY · 系统回放</p>
+          <h2 id="system-title">十五秒，拆解一次端—边—云闭环</h2>
+        </div>
+      </div>
+
+      <p class="replay-note">仓库记录的前台端到端时延约为 92–111 ms（含 Adapter 下发的网络仿真口径）；本页将异步流程扩展为 15 秒，仅为清晰展示漂移、调度、上行、蒸馏与恢复阶段，不代表系统真实执行耗时。</p>
+
+      <div class="mode-row">
+        <div class="segmented" role="group" aria-label="数据场景">
+          <button class="segment active" data-scene="boxcars">BoxCars116k</button>
+          <button class="segment" data-scene="modelnet">ModelNet40</button>
+        </div>
+        <div class="segmented drift-picker" role="group" aria-label="漂移类型">
+          <button class="segment active" data-drift="motion">运动模糊</button>
+          <button class="segment" data-drift="illumination">光照</button>
+          <button class="segment" data-drift="noise">传感器噪声</button>
+        </div>
+        <div class="modelnet-case-picker" id="modelnetCasePicker" hidden>
+          <span>MODELNET40 SAMPLE · 演示样本</span>
+          <strong>airplane_0627 · 四视图干净对照</strong>
+        </div>
+      </div>
+
+      <p class="modelnet-evidence-note" id="modelnetEvidenceNote" hidden><strong>OFFICIAL TEST · 官方测试</strong><span>四视图来自 ModelNet40 官方测试样本 airplane_0627；暗光和噪声对应正式评测条件，运动模糊以多重残影实时生成，仅用于交互视觉演示。右侧百分比为 2,468 条测试轨迹的聚合准确率，不是单样本置信度。</span></p>
+
+      <div class="demo-shell" data-stage="idle" data-drift="motion" data-scene="boxcars">
+        <div class="camera-zone">
+          <div class="camera-grid" id="cameraGrid">
+            <figure class="camera-frame view-1">
+              <div class="camera-image"></div>
+              <figcaption><span class="frame-label">RIGHT FRONT / 右前方</span><span class="frame-state">READY</span></figcaption>
+              <span class="frame-index">01</span>
+            </figure>
+            <figure class="camera-frame view-2">
+              <div class="camera-image"></div>
+              <figcaption><span class="frame-label">LEFT FRONT / 左前方</span><span class="frame-state">READY</span></figcaption>
+              <span class="frame-index">02</span>
+            </figure>
+            <figure class="camera-frame view-3">
+              <div class="camera-image"></div>
+              <figcaption><span class="frame-label">LEFT REAR / 左后方</span><span class="frame-state">READY</span></figcaption>
+              <span class="frame-index">03</span>
+            </figure>
+            <figure class="camera-frame view-4">
+              <div class="camera-image"></div>
+              <figcaption><span class="frame-label">RIGHT REAR / 右后方</span><span class="frame-state">READY</span></figcaption>
+              <span class="frame-index">04</span>
+            </figure>
+          </div>
+        </div>
+
+        <aside class="telemetry" aria-label="系统遥测">
+          <div class="stage-header">
+            <span id="stageCode">S0</span>
+            <div><p>CURRENT STAGE · 当前阶段</p><h3 id="stageTitle">等待启动</h3></div>
+          </div>
+
+          <div class="prediction-block">
+            <div class="metric-label" id="predictionMetricLabel">EDGE PREDICTION · 边缘预测</div>
+            <strong id="prediction">Porsche</strong>
+            <span id="predictionNote">演示品牌类别 / 占位</span>
+            <div class="confidence-row"><span id="confidenceLabel">CONFIDENCE · 置信度</span><b id="confidenceText">88%</b></div>
+            <div class="meter"><span id="confidenceBar" style="width:88%"></span></div>
+          </div>
+
+          <div class="decision-grid">
+            <div><span>v<sub>t</sub></span><strong id="viewAction" class="view-selection" aria-label="已选择视角1、视角2、视角3、视角4"><i class="view-chip is-active">视角1</i><i class="view-chip is-active">视角2</i><i class="view-chip is-active">视角3</i><i class="view-chip is-active">视角4</i></strong><small>视图选择</small></div>
+            <div><span>k<sub>t</sub></span><strong id="tokenAction">100%</strong><small>Token 保留</small></div>
+            <div><span>u<sub>t</sub></span><strong id="cloudAction">本地自治</strong><small>协同模式</small></div>
+          </div>
+
+          <dl class="telemetry-list">
+            <div><dt id="driftMetricLabel">漂移分数<small>E<sub>drift</sub></small></dt><dd id="driftScore">0.08</dd></div>
+            <div><dt>边缘时延<small>EDGE LATENCY</small></dt><dd id="edgeLatency">80 ms</dd></div>
+            <div><dt>传输带宽<small>BANDWIDTH</small></dt><dd id="bandwidth">24.0 Mbps</dd></div>
+            <div><dt>适配器状态<small>ADAPTER</small></dt><dd id="adapterState">基线模型</dd></div>
+          </dl>
+
+          <ol class="causal-chain" aria-label="系统决策因果链">
+            <li>置信度下降</li>
+            <li>漂移分数升高</li>
+            <li>视角2关闭</li>
+            <li>Token 保留降低</li>
+            <li>云端协同开启</li>
+          </ol>
+
+          <div class="event-log" id="eventLog" role="log" aria-live="polite" aria-relevant="additions text">
+            <p class="log-neutral"><b class="log-index">1</b><span>系统已就绪</span></p>
+          </div>
+        </aside>
+
+        <div class="timeline-panel">
+          <div class="timeline-labels" aria-label="回放阶段跳转">
+            <button class="timeline-stage" type="button" data-stage="sense" data-time="0" style="left:0%">感知</button>
+            <button class="timeline-stage" type="button" data-stage="drift" data-time="3" style="left:20%">漂移</button>
+            <button class="timeline-stage" type="button" data-stage="schedule" data-time="5" style="left:33.3%">调度</button>
+            <button class="timeline-stage" type="button" data-stage="upload" data-time="7" style="left:46.6%">上行</button>
+            <button class="timeline-stage" type="button" data-stage="distill" data-time="10" style="left:66.6%">蒸馏</button>
+            <button class="timeline-stage" type="button" data-stage="recovery" data-time="12" style="left:80%">恢复</button>
+            <button class="timeline-stage" type="button" data-stage="done" data-time="15" style="left:100%">完成</button>
+          </div>
+          <input id="timeline" type="range" min="0" max="100" value="0" aria-label="回放进度" aria-valuetext="0%">
+          <div class="timeline-ticks" aria-hidden="true"><span style="left:0%">0%</span><span style="left:20%">20%</span><span style="left:33.3%">33%</span><span style="left:46.6%">47%</span><span style="left:66.6%">67%</span><span style="left:80%">80%</span><span style="left:100%">100%</span></div>
+        </div>
+
+        <div class="demo-controls">
+          <div class="control-buttons">
+            <button class="icon-command primary" id="playButton" title="开始、暂停或继续回放" aria-label="开始回放"><span id="playIcon">▶</span><b id="playText">开始</b></button>
+            <button class="icon-command" id="resetButton" title="重置回放" aria-label="重置回放"><span>↺</span><b>重置</b></button>
+          </div>
+          <div class="time-display"><strong id="timeDisplay">0%</strong><span>完成进度</span></div>
+          <button class="icon-command export" id="exportButton" title="导出本次运行数据" aria-label="导出运行数据"><span>↓</span><b>导出运行</b></button>
+        </div>
+      </div>
+      <section class="adapter-module" id="adapter" aria-labelledby="adapter-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CORE TECHNOLOGY / KNOWLEDGE DELIVERY · 核心技术 / 知识传递</p>
+            <h2 id="adapter-title">大模型留在云端，只把适应能力交给边缘</h2>
+          </div>
+        </div>
+        <p class="section-lead">边缘节点发现运动模糊、暗光等场景漂移后，从多路观测中筛选少量有代表性的无标签样本并上传。云端冻结 InternViT-6B 教师模型，用其特征与 Logits 为漂移样本生成监督，只训练约 0.3M 个 AdaptFormer 旁路参数；随后将约 1.2 MB 的 Adapter 包下发到边缘热加载。整个过程不传输 6B 教师模型，也不替换边缘主干与分类头，更新失败时可快速回滚，前台推理无需停机。</p>
+
+        <div class="knowledge-flow" aria-label="漂移样本上行、云端知识蒸馏与边缘适配更新流程">
+          <article class="knowledge-stage sample-stage">
+            <header class="knowledge-stage-head">
+              <span>01</span>
+              <div><small>EDGE · 边缘侧</small><h3>筛选代表性漂移样本</h3></div>
+              <b>≈ 5 MB</b>
+            </header>
+            <div class="drift-sample-grid">
+              <figure><img src="assets/knowledge-right-front-blur.webp" alt="右前方运动模糊车辆样本"><figcaption>右前方</figcaption></figure>
+              <figure><img src="assets/knowledge-left-front-blur.webp" alt="左前方运动模糊车辆样本"><figcaption>左前方</figcaption></figure>
+              <figure><img src="assets/knowledge-left-rear-blur.webp" alt="左后方运动模糊车辆样本"><figcaption>左后方</figcaption></figure>
+              <figure><img src="assets/knowledge-right-rear-blur.webp" alt="右后方运动模糊车辆样本"><figcaption>右后方</figcaption></figure>
+            </div>
+            <p>四路摄像头只上传能代表当前漂移的无标签片段，减少无效数据传输。</p>
+          </article>
+
+          <div class="knowledge-connector" aria-hidden="true"><span>漂移样本上行</span><b>→</b></div>
+
+          <article class="knowledge-stage teacher-stage">
+            <header class="knowledge-stage-head">
+              <span>02</span>
+              <div><small>CLOUD TEACHER · 云端教师</small><h3>诊断漂移并蒸馏修正能力</h3></div>
+              <b>0.3M</b>
+            </header>
+            <figure class="diagnosis-visual">
+              <img src="assets/knowledge-cloud-diagnosis.webp" alt="云端教师识别车辆残影、暗光和关键细节的诊断示意图">
+            </figure>
+            <div class="diagnosis-key" aria-label="诊断内容"><span class="problem">残影抑制</span><span class="light">暗光补偿</span><span class="feature">关键特征增强</span></div>
+            <p>冻结的 InternViT-6B 教师分析残影、亮度和细粒度特征，用特征与 Logits 监督 Adapter 学习。</p>
+          </article>
+
+          <div class="knowledge-connector" aria-hidden="true"><span>1.2 MB Adapter 下发</span><b>→</b></div>
+
+          <article class="knowledge-stage update-stage">
+            <header class="knowledge-stage-head">
+              <span>03</span>
+              <div><small>EDGE UPDATE · 边缘更新</small><h3>热加载并恢复稳定识别</h3></div>
+              <b>≈ 1.2 MB</b>
+            </header>
+            <div class="recovery-compare">
+              <figure class="before"><img src="assets/knowledge-right-front-blur.webp" alt="Adapter 更新前的运动模糊图像"><figcaption>BEFORE · 漂移</figcaption></figure>
+              <span aria-hidden="true">→</span>
+              <figure class="after"><img src="assets/knowledge-right-front-clean.webp" alt="Adapter 更新后的清晰参考图像"><figcaption>AFTER · 恢复</figcaption></figure>
+            </div>
+            <div class="update-facts"><span>主干不下发</span><span>在线热加载</span><span>支持回滚</span></div>
+            <p>边缘仅替换轻量旁路参数，保留原有模型和业务链路，在不中断推理的情况下适应新场景。</p>
+          </article>
+        </div>
+        <div class="adapter-statement">
+          <strong>6B 教师留在云端</strong>
+          <span></span>
+          <strong>22M 边缘主干保持冻结</strong>
+          <span></span>
+          <strong>仅更新 0.3M 旁路参数</strong>
+        </div>
+      </section>
+      </div>
+    </section>
+
+    <section class="section evidence-section" id="evidence" data-page-theme="light" aria-labelledby="evidence-title">
+      <div class="section-inner">
+      <div class="section-heading">
+        <div><p class="eyebrow">03 / VERIFIED EVIDENCE · 指标证据</p><h2 id="evidence-title">用评分指标组织证据，不堆运行日志</h2></div>
+        <div class="legend"><span><i class="measured-dot"></i>实测</span><span><i class="sim-dot"></i>仿真</span></div>
+      </div>
+
+      <div class="evidence-grid">
+        <article class="evidence-item accuracy-card">
+          <header><span>DRIFT RECOVERY · 漂移恢复</span><b class="evidence-tag measured">实测</b></header>
+          <h3>两类场景漂移恢复</h3>
+          <div class="bar-chart">
+            <div class="chart-group"><span>BoxCars</span><div><i style="width:74.46%"></i><b>74.46</b></div><div class="ours"><i style="width:79.02%"></i><b>79.02</b></div></div>
+            <div class="chart-group"><span>ModelNet40</span><div><i style="width:87.32%"></i><b>87.32</b></div><div class="ours"><i style="width:93.25%"></i><b>93.25</b></div></div>
+          </div>
+          <footer><span>Edge baseline</span><span>Cloud-teacher Adapter</span></footer>
+          <div class="recovery-gallery" aria-label="BoxCars 与 ModelNet40 漂移恢复对比">
+            <div class="recovery-row">
+              <strong>BoxCars116k</strong>
+              <figure class="before"><img src="assets/knowledge-right-front-blur.webp" alt="存在运动模糊的车辆漂移样本"><figcaption>DRIFT INPUT · 漂移输入</figcaption></figure>
+              <span aria-hidden="true">→</span>
+              <figure class="after"><img src="assets/knowledge-right-front-clean.webp" alt="车辆干净参考样本"><figcaption>ADAPTED · 识别恢复</figcaption></figure>
+            </div>
+            <div class="recovery-row">
+              <strong>ModelNet40</strong>
+              <figure class="before modelnet-drift"><img src="assets/modelnet40/airplane_0627/clean/view-1.webp" alt="受暗光和传感器噪声影响的飞机模型样本"><figcaption>DRIFT INPUT · 漂移输入</figcaption></figure>
+              <span aria-hidden="true">→</span>
+              <figure class="after"><img src="assets/modelnet40/airplane_0627/clean/view-1.webp" alt="飞机模型干净参考样本"><figcaption>ADAPTED · 识别恢复</figcaption></figure>
+            </div>
+          </div>
+          <p class="visual-disclaimer">右图用于呈现干净参考与指标恢复；Adapter 修正识别能力，不执行图像去模糊或去噪。</p>
+        </article>
+
+        <article class="evidence-item continuity-card">
+          <header><span>NETWORK RESILIENCE · 弱网韧性</span><b class="evidence-tag simulated">真模型 + 仿真网络</b></header>
+          <h3>弱网期间业务保持</h3>
+          <div class="metric-summary"><strong class="hero-number">90.32%</strong><p>Markov 断联模式 · 2,468 个时隙</p></div>
+          <div class="threshold"><span style="width:90.32%"></span><i style="left:90%"></i></div>
+          <figure class="evidence-visual"><img src="assets/evidence-network-resilience.webp" alt="Lyapunov 带宽队列在网络波动下维持边缘业务的示意图"><figcaption>LYAPUNOV QUEUE · 带宽队列持续调节上传节奏</figcaption></figure>
+        </article>
+
+        <article class="evidence-item conflict-card">
+          <header><span>MULTI-NODE CONSISTENCY · 多节点一致性</span><b class="evidence-tag measured">实测</b></header>
+          <h3>冲突检测与仲裁</h3>
+          <div class="split-metric"><div><strong>4.06%</strong><span>冲突率 / 要求 ≤ 5%</span></div><div><strong>100%</strong><span>解决率 / 要求 ≥ 90%</span></div></div>
+          <footer><span>BoxCars test 12,322 条</span><span>500 次冲突</span></footer>
+          <figure class="evidence-visual"><img src="assets/evidence-conflict-arbitration.webp" alt="四节点冲突通过加权投票和贝叶斯融合完成仲裁的示意图"><figcaption>ARBITRATION · 多节点冲突进入统一仲裁</figcaption></figure>
+          <div class="method-key"><span>加权投票</span><span>贝叶斯融合</span></div>
+        </article>
+
+        <article class="evidence-item latency-card">
+          <header><span>LATENCY EVIDENCE · 时延证据</span></header>
+          <h3>前台时延与后台更新分离</h3>
+          <div class="latency-stack"><span style="width:72%">EDGE 80 ms</span><span style="width:18%">COMM</span><span style="width:10%"></span></div>
+          <strong class="latency-range">92–111 ms</strong>
+          <p>含 Adapter 前台下发的网络仿真估计；TTFT 需按统一硬件与 batch=1 重测。</p>
+          <figure class="evidence-visual"><img src="assets/evidence-foreground-background.webp" alt="边缘电脑热加载轻量 Adapter 并与云端后台训练分离的示意图"><figcaption>HOT LOAD · 前台持续推理，后台异步生成 Adapter</figcaption></figure>
+        </article>
+      </div>
+      </div>
+    </section>
+
+    <section class="section closing-section" id="team" data-page-theme="dark" aria-labelledby="team-title">
+      <div class="closing-copy">
+        <p class="eyebrow">04 / TEAM &amp; DELIVERY · 团队与交付</p>
+        <h2 id="team-title">从单点智能，走向全局智能</h2>
+        <p>轻量感知、动态调度、弱网保障与冲突仲裁，共同构成可运行的端—边—云闭环。</p>
+      </div>
+      <div class="team-band">
+        <div><small>ADVISORS · 指导教师</small><strong>周睿婷 · 东方 · 孟杰</strong></div>
+        <div><small>TEAM · 团队成员</small><strong>王成洋 · 钟捷杭 · 张晨 · 唐凤玲 · 苏程鑫</strong></div>
+        <div class="school-identity"><img src="assets/seu-logo.jpg" alt="东南大学校徽"><span><strong>东南大学</strong><em>SOUTHEAST UNIVERSITY</em></span></div>
+      </div>
+      <a class="footer-github" href="https://github.com/CYWang0207/EdgeCloud" target="_blank" rel="noreferrer">
+        <svg aria-hidden="true"><use href="#github-icon"></use></svg>
+        <span><small>代码、实验脚本与复现说明</small><strong>访问 GitHub 公共代码仓</strong></span>
+        <b aria-hidden="true">↗</b>
+      </a>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
