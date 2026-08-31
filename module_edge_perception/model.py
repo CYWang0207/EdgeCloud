@@ -14,7 +14,8 @@ class EarlyFusionMultiViewViT(nn.Module):
         self.num_views = num_views
 
         # 1. 获取预训练的 2D ViT
-        print(f"正在加载 {model_name} 预训练权重用于早期融合...")
+        init_mode = "ImageNet 预训练权重" if pretrained else "随机初始化权重"
+        print(f"正在使用 {model_name} {init_mode}构建早期融合模型...")
         vit = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
         embed_dim = vit.num_features
 

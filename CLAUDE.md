@@ -124,7 +124,7 @@ EdgeCloud/
 │   │ ===== FiLM / VLM-conditioned 消融（保留，不作正式方案）=====
 │   ├── ...（旧消融脚本，保留作对照）
 │   ├── ...（BoxCars/ModelNet 旧训练管线）
-│   ├── prompt_tuning/               # PromptGenerator（可选辅助；两套实现待清理）
+│   ├── prompt_tuning/               # PromptGenerator 历史消融实现
 │   └── benchmarks/                  # B 的评测脚本
 │       ├── benchmark_latency.py / benchmark_memory.py / benchmark_full.py  # TTFT/内存/延迟
 │       ├── benchmark_centralized.py / benchmark_e2e.py
@@ -134,7 +134,7 @@ EdgeCloud/
 │   ├── EdgeCloud_RL/
 │   │   ├── main_edge_cloud_real_model.py  # 主循环+真模型+adapter+network_sim 全链路闭环
 │   │   ├── main_edge_cloud_new.py   # 单节点主循环（已接 network_sim）
-│   │   ├── main_edge_cloud.py       # 【已失效】旧版，勿用
+│   │   ├── main_edge_cloud.py       # 历史接口版本，仅用于结果追溯
 │   │   ├── critic_water_filling.py  # 注水闭式解 Critic
 │   │   ├── actor_memory.py          # Actor DNN + 经验回放
 │   │   ├── network_sim.py           # 网络韧性模拟器（四档+Q_net+TTL+业务五条件）
@@ -142,7 +142,7 @@ EdgeCloud/
 │   │   ├── generate_real_trajectory.py / generate_boxcars_trajectory.py  # 两场景轨迹生成
 │   │   ├── evaluate_rl_policy_on_mvvit.py  # RL 策略真实评估（u=0/u=1/u=2 adapter 语义已补齐）
 │   │   └── plot_*.py
-│   ├── comparison_baselines/        # LSCI/VBRD/Hyperion 基线（有意弱化，答辩公平性有风险）
+│   ├── comparison_baselines/        # LSCI/VBRD/Hyperion 统一接口对照实现
 │   └── multi_node/                  # 多节点仲裁（已实现骨架+真实测试）
 │       ├── arbiter.py               # Arbiter 类（冲突检测+加权投票/贝叶斯融合+回滚+统计）
 │       └── multi_node_eval.py       # 真实多节点多视角评估（4节点各看3缺1，已跑通）
@@ -259,8 +259,8 @@ EdgeCloud/
 5. ✅ **业务保持率/e2e 含通信口径**：已落地（docs/网络波动模拟器设计.md 7.2节，全部 >90%/≤200ms）。
 6. ✅ **多节点真冲突率**：已跑完（4.06%/100%）。
 7. ⚠️ **label-only 数字口径**：两份文档数字口径待统一，已不影响正式指标。
-8. ⚠️ **基线公平性**：comparison_baselines 被有意弱化，建议至少一个基线用未弱化实现。
-9. ⚠️ **prompt/adapter 双轨**：两套 prompt 实现待清理，技术债。
+8. ⚠️ **基线公平性**：comparison_baselines 为统一接口下的简化实现，正式对比必须公开参数与实现边界。
+9. ℹ️ **历史 Prompt 路线**：Prompt 实现仅用于历史消融，不属于 Adapter 正式主线。
 10. ⚠️ **方案总览.md / 接口契约.md**：cloud-teacher 叙事已更新，但可进一步精简。
 
 ---

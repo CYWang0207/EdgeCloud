@@ -1,27 +1,33 @@
-# models · 模型权重目录（内容不进 Git）
+# models · 模型权重清单
 
-实际权重统一保存在仓库外层的 `shared/models/`；本目录只保留历史兼容说明。
+模型权重不直接进入 Git 历史，正式文件通过 [GitHub Release](https://github.com/CYWang0207/EdgeCloud/releases/latest) 提供。下载后按以下结构放置：
 
-**模型权重（*.pth / *.onnx / *.bin / *.safetensors 等）不进 Git 仓库**，本目录在仓库中只保留本说明文件。
-
-## 使用方式
-
-1. 从团队网盘或实验服务器下载所需权重。
-2. 按数据集放入 `shared/models/` 的独立目录；Git 工作树中的本目录不存放权重。
-
-```
+```text
 models/
-├── README.md                                              # 本文件（唯一进 Git 的文件）
-├── mvvit_base/                                            # MV-ViT 基座权重（网盘下载）
-├── boxcars_cloud_teacher_adapter_20260809/
-│   └── cloud_unlabeled/best.pth                           # BoxCars 正式下发 adapter（约 1.2MB）
-└── modelnet40_cloud_teacher_adapter_20260812/
-    └── cloud_unlabeled/best.pth                           # ModelNet40 正式下发 adapter（约 1.2MB）
+├── InternViT-6B/                                      # 云端冻结视觉教师
+├── mv_vit_token_epoch_30.pth                          # ModelNet40 Edge baseline
+├── boxcars_make_baseline/
+│   └── best.pth                                       # BoxCars Edge baseline
+├── modelnet40_cloud_teacher_adapter/
+│   └── cloud_unlabeled/best.pth                       # ModelNet40 正式 Adapter
+└── boxcars_cloud_teacher_adapter/
+    └── cloud_unlabeled/best.pth                       # BoxCars 正式 Adapter
 ```
 
-因此当前恰好只有两个正式模型文件，每个数据集一个。ModelNet40 权重为 8/12 clean-guard
-再训练的最终版；云端 task head 属于实验 artifact，
-放在对应 `local/results/<dataset>_.../artifacts/`；Edge baseline 和 InternViT backbone
-是输入依赖，也不在这里重复存放。
+## 正式 Adapter
 
-`.gitignore` 已配置忽略本目录下除 README 外的所有内容，正常 `git add .` 不会误传权重。
+| 场景 | 参数量 | 大小 | SHA-256 |
+|---|---:|---:|---|
+| ModelNet40 | 299,916 | 1,219,859 bytes | `1e24728b3ffa1f44f0dfd1db64c7b0f2e195566df8cb2b38e2dbebb037f4d82a` |
+| BoxCars116k | 299,916 | 1,216,745 bytes | 提交前按 Release 文件补充 |
+
+Adapter checkpoint 只包含 AdaptFormer 参数，不包含 MV-ViT backbone、分类头、归一化层或云端 projector。两场景权重相互隔离，不跨数据集复用。
+
+## 校验
+
+```bash
+shasum -a 256 models/modelnet40_cloud_teacher_adapter/cloud_unlabeled/best.pth
+shasum -a 256 models/boxcars_cloud_teacher_adapter/cloud_unlabeled/best.pth
+```
+
+正式提交前必须在 Release 说明中补齐每个文件的版本、大小、SHA-256、训练 commit、适用场景和许可证边界。

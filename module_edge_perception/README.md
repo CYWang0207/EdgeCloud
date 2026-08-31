@@ -40,21 +40,21 @@ module_edge_perception/
 ├── train_boxcars.py                  # BoxCars baseline DDP 训练（test Top-1=88.04%）
 ├── evaluate_boxcars.py               # BoxCars 官方评估
 ├── train_boxcars_retrain_drift.py    # BoxCars 漂移全量重训
-├── train_boxcars_token_prompt.py     # BoxCars Prompt 适配训练（过渡）
+├── train_boxcars_token_prompt.py     # BoxCars Prompt 历史消融训练
 ├── test_boxcars_inference.py         # BoxCars→MV-ViT 前向冒烟测试
 ├── dataset.py                        # 场景一 ModelNet40 数据加载
 ├── train.py / train_retrain_drift.py / train_token_prompt.py  # 场景一训练
 ├── test.py / evaluate_train_set.py   # 场景一评估
-├── prompt_tuning/                    # PromptGenerator（可选辅助，存在两套实现待清理）
+├── prompt_tuning/                    # PromptGenerator 历史消融实现，不属于正式主线
 └── benchmarks/                       # TTFT / 内存 / 延迟 / 一体化测量
 ```
 
 
-## 负责人任务
+## 性能评测范围
 
-- 测量 TTFT、推理延迟、GPU 内存
-- Token 剪枝前后对比实验
-- 换 ViT-Tiny（如需更小模型）只需改一行 model_name 参数
+- TTFT、推理延迟和 GPU 内存；
+- Token 剪枝前后对比；
+- ViT-Small 正式结果与 ViT-Tiny 资源对照。
 
 ## 正式云端视觉教师流程（当前主线）
 
@@ -70,30 +70,30 @@ module_edge_perception/
 ## BoxCars 相机退化 Adapter 实验（监督基线）
 
 漂移校正直接使用 BoxCars 的真实类别标签与 clean/corrupt 成对监督。
-先在完整 validation 集校准真实监控退化，再训练新的隔离权重；不要覆盖旧的
+先在完整 validation 集校准面向监控场景的合成相机退化，再训练新的隔离权重；不要覆盖旧的
 `boxcars_drift_adapters/general`。当前有效组合为非均匀曝光、方向运动模糊、低照度
 传感器噪声和雾霾：
 
 ```bash
 python calibrate_boxcars_camera_corruptions.py \
-  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --output-json outputs/boxcars_camera_calibration.json
+  --dataset-path data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint models/boxcars_make_baseline/best.pth \
+  --output-json artifacts/boxcars/boxcars_camera_calibration.json
 
 python train_boxcars_camera_adapter.py \
-  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --save-dir checkpoints/boxcars_drift_adapters/camera_mixture_calibrated \
+  --dataset-path data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint models/boxcars_make_baseline/best.pth \
+  --save-dir artifacts/boxcars/supervised_camera_adapter \
   --drift-types illumination,motion_blur,sensor_noise,haze \
   --drift-weights .25 .25 .30 .20 \
   --fixed-severities illumination=1.0,motion_blur=.8,sensor_noise=.6,haze=1.0
 
 python evaluate_boxcars_camera_adapter.py \
-  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint checkpoints/boxcars_make_baseline/best.pth \
-  --adapter-checkpoint checkpoints/boxcars_drift_adapters/camera_mixture_calibrated/best.pth \
+  --dataset-path data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint models/boxcars_make_baseline/best.pth \
+  --adapter-checkpoint artifacts/boxcars/supervised_camera_adapter/best.pth \
   --corruption-specs illumination=1.0 motion_blur=.8 sensor_noise=.6 haze=1.0 \
-  --output-json outputs/boxcars_camera_adapter_impact.json
+  --output-json artifacts/boxcars/boxcars_camera_adapter_impact.json
 ```
 
 ## ModelNet40 相机退化 Adapter 实验（监督基线）
@@ -111,20 +111,20 @@ severity 始终保持在 `[0, 1]`，并保留 20% 干净样本。每个场景都
 
 ```bash
 python calibrate_modelnet_camera_corruptions.py \
-  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/modelnet40v2png_ori4 \
-  --baseline-checkpoint checkpoints/mv_vit_token_epoch_30.pth \
-  --output-json outputs/modelnet40_camera_calibration.json
+  --dataset-path data/modelnet40v2png_ori4 \
+  --baseline-checkpoint models/mv_vit_token_epoch_30.pth \
+  --output-json artifacts/modelnet40/modelnet40_camera_calibration.json
 ```
 
 ```bash
 python train_modelnet_drift_adapter.py \
-  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/modelnet40v2png_ori4 \
-  --baseline-checkpoint checkpoints/mv_vit_token_epoch_30.pth \
-  --save-dir checkpoints/modelnet40_drift_adapters/camera_mixture
+  --dataset-path data/modelnet40v2png_ori4 \
+  --baseline-checkpoint models/mv_vit_token_epoch_30.pth \
+  --save-dir artifacts/modelnet40/supervised_camera_adapter
 
 python evaluate_modelnet_drift_adapter.py \
-  --dataset-path /root/autodl-tmp/EdgeCloudRuntime/shared/data/modelnet40v2png_ori4 \
-  --baseline-checkpoint checkpoints/mv_vit_token_epoch_30.pth \
-  --adapter-checkpoint checkpoints/modelnet40_drift_adapters/camera_mixture/best.pth \
-  --output-json outputs/modelnet40_camera_adapter_impact.json
+  --dataset-path data/modelnet40v2png_ori4 \
+  --baseline-checkpoint models/mv_vit_token_epoch_30.pth \
+  --adapter-checkpoint artifacts/modelnet40/supervised_camera_adapter/best.pth \
+  --output-json artifacts/modelnet40/modelnet40_camera_adapter_impact.json
 ```

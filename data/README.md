@@ -22,10 +22,10 @@ data/
         └── INFO.txt
 ```
 
-服务器上的实际路径为：
+推荐在仓库根目录使用以下相对路径：
 
 ```text
-/root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k
+data/BoxCars116k_kaggle/BoxCars116k
 ```
 
 ## 场景 2：BoxCars116k 交通监控车辆识别
@@ -99,14 +99,14 @@ views, view_mask, label, metadata = dataset[0]
 
 不要自行按单张图片随机切分，也不要把 `_mask.png` 当作 RGB 输入。
 
-## 服务器验证
+## DataLoader 验证
 
-从感知模块目录运行：
+从仓库根目录运行：
 
 ```bash
-cd /root/autodl-tmp/EdgeCloud/module_edge_perception
-/root/miniconda3/bin/python test_boxcars_inference.py \
-  --dataset-path /root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k \
+cd module_edge_perception
+python test_boxcars_inference.py \
+  --dataset-path ../data/BoxCars116k_kaggle/BoxCars116k \
   --task make --split test
 ```
 
@@ -117,7 +117,7 @@ cd /root/autodl-tmp/EdgeCloud/module_edge_perception
 正式训练默认使用 16 类品牌任务。双卡全视图 baseline（无 Token 剪枝）运行：
 
 ```bash
-cd /root/autodl-tmp/EdgeCloud/module_edge_perception
+cd module_edge_perception
 torchrun --standalone --nproc_per_node=2 train_boxcars.py \
   --task make --batch-size 4 --accumulation-steps 2
 ```

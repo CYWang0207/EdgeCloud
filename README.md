@@ -1,114 +1,176 @@
-# EdgeCloud · 面向端边云协同推理的分布式感知与全局优化决策系统
+# EdgeCloud
 
-> 2026挑战杯"揭榜挂帅"擂台赛 · 赛题 XH-202606  
-> **核心思路**：云端大 ViT 先在离线标注集上训练场景分类头，再对代表性漂移样本生成教师输出；边缘侧在不使用这些样本真实标签的条件下蒸馏轻量 AdaptFormer Adapter。边缘 MV-ViT 主干冻结，仅加载场景专用 Adapter，调度层通过 Actor-Critic + Lyapunov 优化在线决策。
-> **下发的是 Adapter-only 参数包，不是大 ViT 或整套边缘模型。** 当前正式流程已覆盖 BoxCars116k 与 ModelNet40，并将任务头训练、无标签刷新、开发集选型和官方测试集终评隔离。
+> 面向端边云协同推理的分布式感知与全局优化决策系统<br>
+> 2026 挑战杯“揭榜挂帅”擂台赛 · 赛题 XH-202606
 
-## 团队成员
+[在线演示](https://cywang0207.github.io/EdgeCloud-Demo/) · [项目宣传片](submission/作品运行效果视频.mp4) · [作品报告](submission/作品报告.pdf) · [最新 Release](https://github.com/CYWang0207/EdgeCloud/releases/latest) · [提交材料入口](README_FIRST.md)
 
-| 成员 | 负责模块 | 职责 |
-|------|---------|------|
-| 王成洋 | 系统集成 + 多节点协同 | 总体架构、接口统筹、多节点冲突检测与仲裁 |
-| 钟捷杭 | 模型评测 | TTFT / 内存 / 延迟测量 |
-| 张晨 | 第二场景 | 第二应用场景数据集适配与全流程训练 |
-| 唐凤玲 | 网络韧性 + 评测 | 网络波动模拟、连续性指标、评测自动化 |
-| 苏程鑫 | 文档 / 实验统筹 | 技术报告、对比图表、Demo 视频、进度追踪 |
+EdgeCloud 面向交通监控与多视角三维物体识别两类场景，在边缘侧使用冻结的 MV-ViT-Small 完成实时推理，在检测到合成相机漂移后，由云端冻结的 InternViT-6B 视觉教师生成监督信号，仅训练并下发约 1.2 MB 的 AdaptFormer 参数包。Actor-Critic、Lyapunov 队列和多节点仲裁共同完成弱网调度与全局决策。
 
-指导老师：周睿婷、东方、孟杰
+> 项目中的 illumination、motion blur、defocus 和 sensor noise 均为在公开数据集上生成并校准的**合成相机退化**，用于可控评测，不宣称为真实道路连续采集实验。
+
+## 总体架构
+
+![EdgeCloud 端边云协同总体架构](docs/assets/system-architecture.webp)
+
+```text
+多视角采集 → 边缘 MV-ViT 实时感知 → 漂移检测
+  → 代表性漂移样本上行 → 云端 InternViT-6B 教师蒸馏
+  → Adapter-only 参数下发 → 边缘热加载与恢复
+  → 多节点冲突检测、仲裁和结果回写
+```
+
+## 核心指标
+
+| 指标 | 赛题要求 | EdgeCloud 结果 | 口径 |
+|---|---:|---:|---|
+| TTFT 降低 | ≥75% | 88.5%（287 ms → 38 ms） | GPU 基准测试，Token 保留率 0.1 |
+| 单次推理内存 | ≤1.5 GB | 约 0.08 GB | GPU 推理峰值，不含框架初始化 |
+| ModelNet40 三类漂移平均准确率 | - | 87.318% → 93.247% | 完整 official test，2,468 条 |
+| BoxCars 三类漂移平均准确率 | - | 74.46% → 79.02% | 完整 official test，12,322 条 |
+| 弱网业务保持率 | ≥90% | 90.28%–90.32% | 四档网络仿真 |
+| 前台端到端时延 | ≤200 ms | 80 ms；含 Adapter 前台下发为 92–111 ms | 网络仿真；`T_edge=80 ms` 为固定参数 |
+| 多节点决策冲突率 | ≤5% | 4.06% | BoxCars 完整 test 仿真 |
+| 冲突解决成功率 | ≥90% | 100% | 加权投票与贝叶斯融合 |
+| Adapter 下发量 | - | 约 1.2 MB | 299,916 个 AdaptFormer 参数 |
+
+详细定义、样本量和证据边界见[实验结果总览](docs/实验结果总览_20260809.md)。其中 80 ms、92–111 ms 为网络模拟器结果，并非真实信创边缘硬件的 wall-clock 测量。
+
+## 主要提交路线
+
+1. 边缘端冻结 22M 参数 MV-ViT-Small 主干，使用多视角融合、视角掩码和 Token 剪枝完成本地推理。
+2. 漂移超过阈值后，仅上传少量代表性四视图轨迹；上传样本在正式 refresh 阶段不使用真实标签。
+3. 云端冻结 InternViT-6B，通过 task logits、视觉特征和 clean replay 训练约 0.3M 参数 AdaptFormer。
+4. 边缘只接收 Adapter-only checkpoint，支持热加载、完整性校验和回滚。
+5. 调度器在 `u_t∈{0,1,2}`、视角选择和 Token 保留率之间联合决策；断网时回退至 `u=0` 本地自治。
+6. 多节点对重叠感知结果执行冲突检测、加权投票或贝叶斯融合，并回写全局决策。
+
+## 两类实验场景
+
+### ModelNet40
+
+一个样本由同一 CAD 物体的四个渲染视角组成。正式评测使用 illumination、defocus 和 sensor noise 三类合成退化，完整 official test 共 2,468 条四视图轨迹。
+
+### BoxCars116k
+
+任务为 16 类车辆品牌识别。四个输入是**同一物理交通摄像头下、同一车辆轨迹中按时间等间隔选取的四个逻辑视角**，不是四个物理摄像头同时追踪同一车辆。正式评测使用 illumination、motion blur 和 sensor noise 三类合成退化，完整 official test 共 12,322 条轨迹。
 
 ## 目录结构
 
-```
+```text
 EdgeCloud/
-├── module_edge_perception/         # 模块一：边缘实时感知
-│   ├── model.py                     #   EarlyFusionMultiViewViT（多视角早期融合 + token剪枝 + 视角掩码）
-│   ├── adaptformer.py              #   AdaptFormer PEFT 模块（已落地，8/3 验收通过）
-│   ├── train_boxcars_cloud_teacher_adapter.py # BoxCars 云教师无标签刷新
-│   ├── modelnet_cloud_teacher_refresh.py # ModelNet40 完整云教师流程
-│   ├── verify_adaptformer.py        #   AdaptFormer 三点验收脚本（零初始化/参数量/三条前向）
-│   ├── boxcars_dataset.py           #   场景二 BoxCars116k 数据加载
-│   ├── dataset.py / drift_dataset.py
-│   ├── prompt_tuning/               #   Prompt 生成器（可选辅助）
-│   ├── train*.py                    #   训练脚本（ModelNet40 / BoxCars / 漂移重训 / Prompt）
-│   └── benchmarks/                  #   TTFT / 内存 / 延迟 / 一体化测量
-│
-├── module_scheduling/              # 模块二：云边协同调度
-│   ├── EdgeCloud_RL/                #   Actor-Critic RL + Lyapunov 主循环 + 注水 Critic + 网络模拟器
-│   ├── comparison_baselines/       #   LSCI/VBRD/Hyperion 基线
-│   ├── multi_node/                 #   多节点冲突检测与仲裁（arbiter.py + multi_node_eval.py）
-│
-├── common/                          # 漂移模拟器（5种×6档 schedule）
-├── data/                            # 数据集（不进 Git：ModelNet40、BoxCars116k）
-├── models/                          # 模型权重（不进 Git；checkpoints 当前为 0 字节占位）
-├── scripts/                         # 一键运行脚本
-├── docs/                            # 方案文档
-└── requirements.txt                 # Python 依赖
+├── module_edge_perception/    # MV-ViT、AdaptFormer、两场景训练与评测
+├── module_scheduling/         # Actor-Critic、Lyapunov、网络韧性、多节点仲裁
+├── common/                    # 合成漂移与公共数据接口
+├── docs/                      # 方法、接口和正式实验报告
+├── demo-web/                  # 可离线打开的交互演示网页
+├── submission/                # 作品报告与运行效果视频
+├── data/                      # 数据获取和目录说明
+├── models/                    # 权重清单和 Release 获取说明
+├── scripts/                   # 环境验证与复现辅助脚本
+├── README_FIRST.md            # 评委阅读入口
+├── REPRODUCE.md               # 统一复现导航
+└── SUBMISSION_MANIFEST.md     # 提交材料清单
 ```
 
-## 技术架构
+## 5 分钟快速体验
 
-```
-         +---------- 云端 Cloud -------------------+
-         | 场景校准与 Adapter 训练                  |
-         | · InternViT-6B 提取 {features, logits}  |
-         | · Teacher Cache → 四目标蒸馏训练 adapter |
-         | · 多节点冲突仲裁                         |
-         +---+--------------------+----------------+
-   上行漂移样本 |                    | 下行 adapter（约 1.2MB）+ u=2 重训权重
-               |                    v
-         +----------------------------------+
-         |    边缘 Edge（路口盒子）           |
-         | MV-ViT (ViT-Small, 2200万) 主干冻结
-         | + AdaptFormer adapter (可训练)    |
-         | · Token剪枝: k_t                  |
-         | · 视角选择: v_t                   |
-         | · 协同模式: ut in {0,1,2}         |
-         | · 漂移感知: Edrift (香农熵)        |
-         | · Lyapunov 带宽队列               |
-         +----------------------------------+
-                  ^  4 逻辑视角
-                  |
-         +--------+--------+
-         |   端 Device     |
-         |   多源感知数据   |
-         +-----------------+
-```
+### 环境验证
 
-## 方案核心亮点
-
-1. **针对不同场景下发专用的adapter更新**：每个场景只下发其校准、训练后的 AdaptFormer adapter（约 1.2–1.3MB）；冻结的 22M 参数 MV-ViT 主干不传输、不覆盖，在兼具准确率的情况下保证极高的实时性
-2. **多粒度资源调度**：每时隙联合决策视角选择、Token 剪枝率、协同模式，KKT 注水闭式解保证 ms 级决策
-3. **理论保证**：Lyapunov 强稳定性证明、O(1/V) 效用逼近界、KKT 最优性条件
-4. **多源异构**：四个逻辑视角天然异构（光照/遮挡/视角各异），MV-ViT 早期融合统一处理
-
-## 快速开始
+所需文件：无数据集、无训练 checkpoint。首次安装依赖需要联网。
 
 ```bash
 git clone https://github.com/CYWang0207/EdgeCloud.git
 cd EdgeCloud
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python3.11 -m venv .venv
+source .venv/bin/activate                # Windows: .venv\Scripts\activate
+python -m pip install -r requirements.txt
+python scripts/verify_env.py
 ```
 
-## 本项目协作规范
+预期输出：构建随机初始化的 ViT-Small，依次完成四视图推理、Token 剪枝、视角休眠和 CPU 参考计时。需要验证 ImageNet 预训练权重时增加 `--pretrained`。
 
-- 分支命名：`feat/<模块>-<功能>`
-- 合并前需至少 1 人 Code Review
-- 每日 21:00 站会 10 分钟（飞书）
-- 每日 GitHub Issue 更新进度
+### Web Demo
 
-## 时间线
+所需文件：仓库中的 `demo-web/`，无需模型和数据集。
 
-| 日期 | 里程碑 |
-|------|--------|
-| 7/30 | 环境跑通；延迟方案确认；第二场景数据集确认 |
-| 8/3 | MVP 可运行 |
-| 8/10 | 硬指标数字确认 |
-| 8/17 | 代码冻结；报告初稿 |
-| 8/21 | 最终审核，结果修缮 |
-| 8/31 | 正式提交截止 |
+```bash
+python -m http.server 8000 --directory demo-web
+```
 
-## 大文件红线
+浏览器访问 <http://localhost:8000>。预期结果：可切换 BoxCars/ModelNet40 场景与漂移类型，并回放 15 秒端边云流程。15 秒是展示时间轴，不代表真实执行耗时。
 
-权重（*.pth/*.onnx）和数据集不进 Git，统一用网盘管理。
+## 正式实验复现
+
+以下命令假设已按 [models/README.md](models/README.md) 和 [data/README.md](data/README.md) 准备输入。完整参数、环境和输出解释见 [REPRODUCE.md](REPRODUCE.md)。
+
+### ModelNet40 完整流程
+
+```bash
+python module_edge_perception/modelnet_cloud_teacher_refresh.py \
+  --dataset-path data/modelnet40v2png_ori4 \
+  --baseline-checkpoint models/mv_vit_token_epoch_30.pth \
+  --teacher-model-path models/InternViT-6B \
+  --output-dir artifacts/modelnet40/reproduced \
+  --resume-cache --illumination-tune
+```
+
+预期输出：teacher gate、Adapter checkpoint、完整 test 指标和逐条件结果。需要 NVIDIA GPU、ModelNet40、边缘 baseline 和 InternViT-6B。
+
+### BoxCars 完整评测
+
+```bash
+python module_edge_perception/evaluate_boxcars_cloud_teacher_quick_test.py \
+  --dataset-path data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint models/boxcars_make_baseline/best.pth \
+  --adapter-checkpoint models/boxcars_cloud_teacher_adapter/cloud_unlabeled/best.pth \
+  --output-dir artifacts/boxcars/reproduced \
+  --samples 0
+```
+
+预期输出：12,322 条 official test 的 clean/三类漂移准确率、paired bootstrap 置信区间和预测明细。该命令省略 6B teacher 参数，仅复核固定 Adapter 的最终结果。
+
+### 网络韧性
+
+```bash
+python module_scheduling/EdgeCloud_RL/run_network_resilience_tests.py \
+  --boxcars-input artifacts/inputs/trajectory_boxcars.csv \
+  --modelnet-input artifacts/inputs/trajectory_modelnet40.csv \
+  --output-dir artifacts/network/reproduced
+```
+
+预期输出：static、jitter、jitter_outage、markov 四档结果及业务保持率。此处 `T_edge=80 ms` 是固定仿真参数；Adapter 默认异步下发，不阻塞当前前台链路。
+
+### 多节点冲突仲裁
+
+```bash
+python module_scheduling/multi_node/multi_node_eval.py \
+  --dataset-path data/BoxCars116k_kaggle/BoxCars116k \
+  --baseline-checkpoint models/boxcars_make_baseline/best.pth \
+  --adapter-checkpoint models/boxcars_cloud_teacher_adapter/cloud_unlabeled/best.pth \
+  --task make --split test --fusion weighted \
+  --output artifacts/multi_node/reproduced_weighted.csv
+```
+
+将 `--fusion weighted` 改为 `--fusion bayesian` 可复现另一种仲裁。预期输出：冲突样本、仲裁结果、回滚记录和汇总指标。
+
+## 实验文档
+
+- [两场景实验结果总览](docs/实验结果总览_20260809.md)
+- [ModelNet40 正式结果](docs/第一场景_ModelNet40.md)
+- [BoxCars116k 正式结果](docs/第二场景_BoxCars116k.md)
+- [网络波动模拟器设计与结果](docs/网络波动模拟器设计.md)
+- [多节点冲突仲裁结果](docs/多节点冲突仲裁测试结果_20260811.md)
+- [接口契约](docs/接口契约.md)
+
+## 历史实验
+
+Prompt tuning、监督漂移 Adapter、整模型重训以及 Qwen3-VL 条件注入均保留用于消融或历史对照，不属于当前正式推理链路。正式提交路线统一为“冻结 InternViT-6B 视觉教师 → 无标签 cloud refresh → Adapter-only 下发”。
+
+## 团队
+
+东南大学 EdgeCloud 项目组。团队成员与指导教师信息见[作品报告](submission/作品报告.pdf)。
+
+## 许可与第三方材料
+
+提交前请阅读 [LICENSE](LICENSE) 与 [THIRD_PARTY.md](THIRD_PARTY.md)。数据集、预训练模型和第三方代码分别遵循其原始许可证，本仓库不会通过项目许可证重新授权这些材料。

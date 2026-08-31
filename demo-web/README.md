@@ -7,7 +7,7 @@
 - 演示网站：<https://cywang0207.github.io/EdgeCloud-Demo/>
 - 公共网页仓库：<https://github.com/CYWang0207/EdgeCloud-Demo>
 
-项目代码继续保存在私有 `EdgeCloud` 仓库中，公共仓库只发布 `demo-web` 目录下的网站文件。
+完整项目代码保存在 `EdgeCloud` 主仓库；`EdgeCloud-Demo` 仓库仅用于发布 `demo-web` 静态网站。
 
 ## 发布更新
 

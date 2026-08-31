@@ -2,49 +2,47 @@
 
 ## 职责
 
-- Actor-Critic RL：Actor（DNN）生成候选动作，Critic（注水算法）精确评估
-- Lyapunov 带宽队列：长期平均带宽约束优化
-- 场景专用 Adapter：将已校准的 adapter-only 权重作为 u=1 小更新进行传输模拟
-- 多节点协同：冲突检测 + 云端一致性仲裁
-- 网络韧性：带宽波动 + 断连 fallback
+- Actor-Critic：Actor 生成候选动作，Critic 通过注水算法评估资源分配。
+- Lyapunov 带宽队列：约束长期平均通信量并管理后台更新积压。
+- 协同模式：`u=0` 本地自治、`u=1` Adapter refresh、`u=2` 结构性模型更新。
+- 网络韧性：模拟带宽波动、丢包和断连，并在弱网时执行本地回退。
+- 多节点协同：检测重叠感知结果冲突，执行加权投票或贝叶斯融合。
 
-## 对标指标
+## 正式指标
 
-| 指标 | 要求 | 方法 |
-|------|------|------|
-| 端到端时延 | <= 0.2s | 视角休眠 + Token 剪枝 + O(V²) 注水（异步口径 80ms；含 1.2MB adapter 前台下发 92–111ms） |
-| 业务连续性 | >= 90% | Lyapunov 稳定性 + ut=0 本地自治（实测 90.28–90.32%） |
-| 决策冲突 | <= 5% | 云端全局仲裁（实测 4.06%） |
-| 冲突解决 | >= 90% | 置信度加权投票 + 回滚（实测 100%） |
+| 指标 | 要求 | 结果与口径 |
+|---|---:|---|
+| 前台端到端时延 | ≤200 ms | 异步口径 80 ms；含 1.2 MB Adapter 前台下发为 92–111 ms，均为网络仿真 |
+| 业务连续性 | ≥90% | 四档网络 90.28%–90.32% |
+| 决策冲突 | ≤5% | 4.06% |
+| 冲突解决 | ≥90% | 100% |
 
-## 目录约定
+> 网络模拟器中的 `T_edge=80 ms` 是固定参数，不是真实边缘硬件的 wall-clock 实测值。默认架构将 Adapter 生成与下发作为后台异步任务，因此不阻塞当前前台推理；92–111 ms 是显式将 Adapter 下发计入前台后的对照仿真。
 
-```
+## 目录
+
+```text
 module_scheduling/
-├── EdgeCloud_RL/             # Actor-Critic RL + Lyapunov 主循环（实际代码在此，非 scheduler/ 子目录）
-│   ├── main_edge_cloud_new.py  # 单节点主循环（已接 adapter u=1 口径 + network_sim）
-│   ├── main_edge_cloud.py      # 【已失效】旧版，Critic 调用签名不匹配，勿用
-│   ├── actor_memory.py / critic_water_filling.py
-│   ├── generate_real_trajectory.py / evaluate_rl_policy_on_mvvit.py
-│   ├── network_sim.py           # 网络波动模拟器
-│   └── plot_*.py
-├── comparison_baselines/     # LSCI/VBRD/Hyperion 基线（有意弱化，答辩公平性有风险）
-├── multi_node/                # arbiter.py + multi_node_eval.py
+├── EdgeCloud_RL/
+│   ├── main_edge_cloud_new.py          # 当前单节点调度主循环
+│   ├── main_edge_cloud_real_model.py   # 接入真实模型轨迹的全链路评测
+│   ├── main_edge_cloud.py              # 历史接口版本，仅用于结果追溯
+│   ├── actor_memory.py
+│   ├── critic_water_filling.py
+│   ├── network_sim.py
+│   └── run_network_resilience_tests.py
+├── comparison_baselines/               # LSCI、VBRD、Hyperion 对照实现
+└── multi_node/
+    ├── arbiter.py
+    └── multi_node_eval.py
 ```
 
+## 复现入口
 
-## 负责人任务
+正式运行命令、所需输入和预期输出见仓库根目录的 [REPRODUCE.md](../REPRODUCE.md)。算法定义和完整结果见：
 
-### A（组长）— 多节点协同 + 集成
-- 在 main_edge_cloud_new.py 中扩展多节点仿真（多个路口节点并行跑）
-- 实现冲突检测算法：同一目标两个节点判断不一致 + 双方置信度都 > 0.7 = 冲突
-- 实现冲突解决策略：云端仲裁 + 置信度加权投票
-- 目标：冲突比例 < 5%，解决成功率 >= 90%
-- 预估代码量：100-150 行，纯本地仿真
+- [网络波动模拟器设计](../docs/网络波动模拟器设计.md)
+- [多节点冲突仲裁测试结果](../docs/多节点冲突仲裁测试结果_20260811.md)
+- [接口契约](../docs/接口契约.md)
 
-### D — 网络韧性 + 评测
-- 在调度仿真中加入带宽波动 + 断连场景模拟
-- 实现业务连续性保持率指标 >= 90%
-- 端到端 wall-clock 延迟测量 <= 0.2s
-- 全指标评测自动化脚本
-- 注意：和 A 改同一个文件（main_edge_cloud_new.py），注意分支管理
+`comparison_baselines/` 中的基线只用于统一输入与指标口径下的对照。正式结论必须同时报告参数、数据划分和限制，不以简化实现替代原论文完整系统。

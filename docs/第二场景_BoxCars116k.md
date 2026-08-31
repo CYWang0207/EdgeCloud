@@ -179,4 +179,4 @@ VLM cache 只在 illumination / blur 上增加约 0.15 / 0.31 pp，却使 noise 
 | 旧 VLM 消融归档 | `local/archive/vlm_conditioned_20260809/` |
 | 主要代码 | `module_edge_perception/`（`boxcars_dataset.py`、`train_boxcars.py`、`evaluate_boxcars.py`、`boxcars_camera_drift_dataset.py`、`export_boxcars_cloud_teacher_cache.py`、`train_boxcars_cloud_teacher_adapter.py`、`evaluate_boxcars_cloud_teacher_quick_test.py`） |
 
-数据集和权重只保存在服务器，不提交 Git。
+数据集不在 Git 中重复分发；官方来源、目录结构和准备方法见 `data/README.md`。正式权重通过 GitHub Release 提供，版本与校验值见 `models/README.md`。
