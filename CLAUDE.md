@@ -124,7 +124,6 @@ EdgeCloud/
 │   │ ===== FiLM / VLM-conditioned 消融（保留，不作正式方案）=====
 │   ├── ...（旧消融脚本，保留作对照）
 │   ├── ...（BoxCars/ModelNet 旧训练管线）
-│   ├── prompt_tuning/               # PromptGenerator 历史消融实现
 │   └── benchmarks/                  # B 的评测脚本
 │       ├── benchmark_latency.py / benchmark_memory.py / benchmark_full.py  # TTFT/内存/延迟
 │       ├── benchmark_centralized.py / benchmark_e2e.py
@@ -134,13 +133,13 @@ EdgeCloud/
 │   ├── EdgeCloud_RL/
 │   │   ├── main_edge_cloud_real_model.py  # 主循环+真模型+adapter+network_sim 全链路闭环
 │   │   ├── main_edge_cloud_new.py   # 单节点主循环（已接 network_sim）
-│   │   ├── main_edge_cloud.py       # 历史接口版本，仅用于结果追溯
+│   │   ├── ../../archive/scheduling/main_edge_cloud.py # 历史接口版本，仅用于结果追溯
 │   │   ├── critic_water_filling.py  # 注水闭式解 Critic
 │   │   ├── actor_memory.py          # Actor DNN + 经验回放
 │   │   ├── network_sim.py           # 网络韧性模拟器（四档+Q_net+TTL+业务五条件）
 │   │   ├── run_network_resilience_tests.py  # 网络韧性测试主脚本
 │   │   ├── generate_real_trajectory.py / generate_boxcars_trajectory.py  # 两场景轨迹生成
-│   │   ├── evaluate_rl_policy_on_mvvit.py  # RL 策略真实评估（u=0/u=1/u=2 adapter 语义已补齐）
+│   │   ├── ../../archive/prompt_experiments/evaluate_rl_policy_on_mvvit.py  # 历史 Prompt 评估
 │   │   └── plot_*.py
 │   ├── comparison_baselines/        # LSCI/VBRD/Hyperion 统一接口对照实现
 │   └── multi_node/                  # 多节点仲裁（已实现骨架+真实测试）

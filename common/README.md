@@ -13,6 +13,6 @@
 | 模块 | 脚本 | 用途 |
 |:---|:---|:---|
 | 边缘感知 | `boxcars_camera_drift_dataset.py` / `modelnet_camera_drift_dataset.py` | 构建漂移数据集，训练 adapter |
-| 云边调度 | `generate_real_trajectory.py` / `evaluate_rl_policy_on_mvvit.py` | 生成漂移轨迹特征（E_drift, struct_drift），输入给 RL 主循环 |
+| 云边调度 | `generate_real_trajectory.py` / `main_edge_cloud_real_model.py` | 生成漂移轨迹特征（E_drift, struct_drift），输入给 RL 主循环；Prompt 评估已归档 |
 
 > ⚠️ 修改本目录下的数据结构或接口，须先在 `docs/接口契约.md` 中达成一致。

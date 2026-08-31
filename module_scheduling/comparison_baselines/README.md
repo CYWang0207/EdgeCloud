@@ -6,7 +6,7 @@
 - `VBRD`
 - `Hyperion-Simple`
 
-这些脚本只生成调度策略日志，即 `v_t`、`k_t`、`u_t`、通信开销、队列长度、token 数和算法执行时间。真实精度仍然由 `EdgeCloud_RL/evaluate_rl_policy_on_mvvit.py` 计算。
+这些脚本只生成调度策略日志，即 `v_t`、`k_t`、`u_t`、通信开销、队列长度、token 数和算法执行时间。历史 Prompt 精度评估已移至 `../../archive/prompt_experiments/`；正式精度以 `artifacts/` 和四个 `scripts/reproduce_*.py` 入口为准。
 
 最终论文对比指标建议只使用：
 

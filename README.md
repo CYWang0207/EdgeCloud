@@ -102,17 +102,12 @@ python -m http.server 8000 --directory demo-web
 
 ## 正式实验复现
 
-以下命令假设已按 [models/README.md](models/README.md) 和 [data/README.md](data/README.md) 准备输入。完整参数、环境和输出解释见 [REPRODUCE.md](REPRODUCE.md)。
+以下命令假设已按 [models/README.md](models/README.md) 和 [data/README.md](data/README.md) 准备输入。完整参数、环境和输出解释见 [REPRODUCE.md](REPRODUCE.md)；四个入口统一读取 [configs/submission.yaml](configs/submission.yaml) 的同名默认约定，并允许 CLI 覆盖。
 
 ### ModelNet40 完整流程
 
 ```bash
-python module_edge_perception/modelnet_cloud_teacher_refresh.py \
-  --dataset-path data/modelnet40v2png_ori4 \
-  --baseline-checkpoint models/mv_vit_token_epoch_30.pth \
-  --teacher-model-path models/InternViT-6B \
-  --output-dir artifacts/modelnet40/reproduced \
-  --resume-cache --illumination-tune
+python scripts/reproduce_modelnet40.py
 ```
 
 预期输出：teacher gate、Adapter checkpoint、完整 test 指标和逐条件结果。需要 NVIDIA GPU、ModelNet40、边缘 baseline 和 InternViT-6B。
@@ -120,12 +115,7 @@ python module_edge_perception/modelnet_cloud_teacher_refresh.py \
 ### BoxCars 完整评测
 
 ```bash
-python module_edge_perception/evaluate_boxcars_cloud_teacher_quick_test.py \
-  --dataset-path data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint models/boxcars_make_baseline/best.pth \
-  --adapter-checkpoint models/boxcars_cloud_teacher_adapter/cloud_unlabeled/best.pth \
-  --output-dir artifacts/boxcars/reproduced \
-  --samples 0
+python scripts/reproduce_boxcars.py
 ```
 
 预期输出：12,322 条 official test 的 clean/三类漂移准确率、paired bootstrap 置信区间和预测明细。该命令省略 6B teacher 参数，仅复核固定 Adapter 的最终结果。
@@ -133,10 +123,7 @@ python module_edge_perception/evaluate_boxcars_cloud_teacher_quick_test.py \
 ### 网络韧性
 
 ```bash
-python module_scheduling/EdgeCloud_RL/run_network_resilience_tests.py \
-  --boxcars-input artifacts/inputs/trajectory_boxcars.csv \
-  --modelnet-input artifacts/inputs/trajectory_modelnet40.csv \
-  --output-dir artifacts/network/reproduced
+python scripts/reproduce_network.py
 ```
 
 预期输出：static、jitter、jitter_outage、markov 四档结果及业务保持率。此处 `T_edge=80 ms` 是固定仿真参数；Adapter 默认异步下发，不阻塞当前前台链路。
@@ -144,15 +131,10 @@ python module_scheduling/EdgeCloud_RL/run_network_resilience_tests.py \
 ### 多节点冲突仲裁
 
 ```bash
-python module_scheduling/multi_node/multi_node_eval.py \
-  --dataset-path data/BoxCars116k_kaggle/BoxCars116k \
-  --baseline-checkpoint models/boxcars_make_baseline/best.pth \
-  --adapter-checkpoint models/boxcars_cloud_teacher_adapter/cloud_unlabeled/best.pth \
-  --task make --split test --fusion weighted \
-  --output artifacts/multi_node/reproduced_weighted.csv
+python scripts/reproduce_multinode.py
 ```
 
-将 `--fusion weighted` 改为 `--fusion bayesian` 可复现另一种仲裁。预期输出：冲突样本、仲裁结果、回滚记录和汇总指标。
+增加 `--fusion bayesian` 可复现另一种仲裁。预期输出：冲突样本、仲裁结果、回滚记录和汇总指标。
 
 ## 实验文档
 

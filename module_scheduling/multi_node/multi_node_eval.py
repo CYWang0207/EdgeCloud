@@ -70,6 +70,7 @@ def parse_args():
     p.add_argument("--max-samples", type=int, default=0, help="0=test 全量；>0 子集验证")
     p.add_argument("--amp-dtype", default="bf16", choices=("bf16", "fp16", "fp32"))
     p.add_argument("--log-every", type=int, default=100)
+    p.add_argument("--seed", type=int, default=42, help="随机种子，写入输出元数据以便复现")
     return p.parse_args()
 
 
@@ -96,6 +97,8 @@ def build_model(args, num_classes, device):
 
 def main():
     args = parse_args()
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
     if not torch.cuda.is_available():
         raise RuntimeError("多节点评估需要 CUDA（在 AutoDL 跑）")
     device = torch.device("cuda")

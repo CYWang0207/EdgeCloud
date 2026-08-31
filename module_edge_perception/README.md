@@ -40,12 +40,10 @@ module_edge_perception/
 ├── train_boxcars.py                  # BoxCars baseline DDP 训练（test Top-1=88.04%）
 ├── evaluate_boxcars.py               # BoxCars 官方评估
 ├── train_boxcars_retrain_drift.py    # BoxCars 漂移全量重训
-├── train_boxcars_token_prompt.py     # BoxCars Prompt 历史消融训练
 ├── test_boxcars_inference.py         # BoxCars→MV-ViT 前向冒烟测试
 ├── dataset.py                        # 场景一 ModelNet40 数据加载
-├── train.py / train_retrain_drift.py / train_token_prompt.py  # 场景一训练
-├── test.py / evaluate_train_set.py   # 场景一评估
-├── prompt_tuning/                    # PromptGenerator 历史消融实现，不属于正式主线
+├── train.py / train_retrain_drift.py # 场景一训练
+├── test.py                           # 场景一评估
 └── benchmarks/                       # TTFT / 内存 / 延迟 / 一体化测量
 ```
 
@@ -128,3 +126,4 @@ python evaluate_modelnet_drift_adapter.py \
   --adapter-checkpoint artifacts/modelnet40/supervised_camera_adapter/best.pth \
   --output-json artifacts/modelnet40/modelnet40_camera_adapter_impact.json
 ```
+历史 Prompt 消融和临时作图脚本已移入 `../archive/`，不属于正式提交链路。

@@ -1,0 +1,29 @@
+# EdgeCloud Challenge Cup 2026 submission defaults.
+# All paths are relative to the repository root and may be overridden on the CLI.
+environment:
+  python: "3.11"
+  pytorch: "2.8.0"
+  cuda: "12.8"
+  timm: "1.0.15"
+paths:
+  modelnet40: data/modelnet40v2png_ori4
+  boxcars116k: data/BoxCars116k_kaggle/BoxCars116k
+  modelnet_baseline: models/mv_vit_token_epoch_30.pth
+  boxcars_baseline: models/boxcars_make_baseline/best.pth
+  modelnet_adapter: models/modelnet40_cloud_teacher_adapter/cloud_unlabeled/best.pth
+  boxcars_adapter: models/boxcars_cloud_teacher_adapter/cloud_unlabeled/best.pth
+  internvit_6b: models/InternViT-6B-224px
+  modelnet_trajectory: artifacts/inputs/trajectory_modelnet40.csv
+  boxcars_trajectory: artifacts/inputs/trajectory_boxcars.csv
+submission:
+  seed: 42
+  model_name: vit_small_patch16_224
+  num_views: 4
+  modelnet_classes: 40
+  boxcars_task: make
+  adapter_rank: 32
+network:
+  edge_delay_ms: 80
+  adapter_size_mb: 1.2
+  deadline_ms: 200
+  modes: [static, jitter, jitter_outage, markov]

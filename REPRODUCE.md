@@ -6,7 +6,7 @@
 
 ## 统一环境
 
-推荐环境：Ubuntu 22.04、Python 3.11、NVIDIA GPU、CUDA 12.x。正式提交前应在 GitHub Release 附件中提供经过验证的依赖锁定文件和权重清单。
+推荐环境：Ubuntu 22.04、Python 3.11、NVIDIA GPU、CUDA 12.8、PyTorch 2.8.0、timm 1.0.15。依赖与路径默认值见 `requirements.txt`、`configs/submission.yaml` 和 `RELEASE_ASSETS.md`。
 
 ```bash
 python3.11 -m venv .venv
@@ -45,10 +45,10 @@ artifacts/inputs/
 |---|---|---|---|
 | 环境与模型结构 | `python scripts/verify_env.py` | 四视图前向与计时 | README |
 | AdaptFormer 结构 | `python module_edge_perception/verify_adaptformer.py` | 参数量、零初始化、前向检查 | 感知模块 README |
-| ModelNet40 | README“ModelNet40 完整流程” | gate、checkpoint、完整 test 指标 | `docs/第一场景_ModelNet40.md` |
-| BoxCars116k | README“BoxCars 完整评测” | 完整 test 指标与 CI | `docs/第二场景_BoxCars116k.md` |
-| 网络韧性 | README“网络韧性” | 四档网络 CSV/JSON | `docs/网络波动模拟器设计.md` |
-| 多节点仲裁 | README“多节点冲突仲裁” | 冲突、融合与回滚记录 | `docs/多节点冲突仲裁测试结果_20260811.md` |
+| ModelNet40 | `python scripts/reproduce_modelnet40.py` | gate、checkpoint、完整 test 指标 | `docs/第一场景_ModelNet40.md` |
+| BoxCars116k | `python scripts/reproduce_boxcars.py` | 完整 test 指标与 CI | `docs/第二场景_BoxCars116k.md` |
+| 网络韧性 | `python scripts/reproduce_network.py` | 四档网络 CSV/JSON | `docs/网络波动模拟器设计.md` |
+| 多节点仲裁 | `python scripts/reproduce_multinode.py` | 冲突、融合与回滚记录 | `docs/多节点冲突仲裁测试结果_20260811.md` |
 
 ## 口径说明
 

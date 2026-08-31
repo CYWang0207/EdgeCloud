@@ -1,0 +1,174 @@
+split: head=9043, refresh=480, dev=320
+head epoch=1/80 mean_drift=54.27% clean=63.12% illumination_1.0=55.62% defocus_0.2=62.81% sensor_noise_0.4=44.38%
+head epoch=10/80 mean_drift=91.98% clean=95.31% illumination_1.0=91.25% defocus_0.2=95.31% sensor_noise_0.4=89.38%
+head epoch=20/80 mean_drift=94.48% clean=96.56% illumination_1.0=94.38% defocus_0.2=96.56% sensor_noise_0.4=92.50%
+head epoch=30/80 mean_drift=94.27% clean=95.94% illumination_1.0=93.75% defocus_0.2=95.94% sensor_noise_0.4=93.12%
+head epoch=40/80 mean_drift=94.38% clean=95.62% illumination_1.0=95.00% defocus_0.2=95.94% sensor_noise_0.4=92.19%
+head epoch=50/80 mean_drift=95.21% clean=96.25% illumination_1.0=95.94% defocus_0.2=95.94% sensor_noise_0.4=93.75%
+head epoch=60/80 mean_drift=94.27% clean=95.94% illumination_1.0=94.38% defocus_0.2=96.25% sensor_noise_0.4=92.19%
+head epoch=70/80 mean_drift=94.17% clean=95.31% illumination_1.0=93.75% defocus_0.2=95.62% sensor_noise_0.4=93.12%
+head epoch=80/80 mean_drift=95.42% clean=96.56% illumination_1.0=95.94% defocus_0.2=96.25% sensor_noise_0.4=94.06%
+正在加载 vit_small_patch16_224 预训练权重用于早期融合...
+正在加载 vit_small_patch16_224 预训练权重用于早期融合...
+adapter mode=illum_clean_guard epoch=1/8 loss=2.1819 mean_drift=95.94% clean=100.00% illumination_1.0=93.12% defocus_0.2=99.06% sensor_noise_0.4=95.62%
+adapter mode=illum_clean_guard epoch=2/8 loss=1.4408 mean_drift=96.56% clean=100.00% illumination_1.0=93.44% defocus_0.2=99.69% sensor_noise_0.4=96.56%
+adapter mode=illum_clean_guard epoch=3/8 loss=1.0011 mean_drift=96.15% clean=100.00% illumination_1.0=91.25% defocus_0.2=99.38% sensor_noise_0.4=97.81%
+adapter mode=illum_clean_guard epoch=4/8 loss=0.8814 mean_drift=96.35% clean=99.69% illumination_1.0=92.50% defocus_0.2=99.69% sensor_noise_0.4=96.88%
+adapter mode=illum_clean_guard epoch=5/8 loss=0.6467 mean_drift=96.67% clean=100.00% illumination_1.0=92.81% defocus_0.2=99.38% sensor_noise_0.4=97.81%
+adapter mode=illum_clean_guard epoch=6/8 loss=0.5676 mean_drift=96.56% clean=100.00% illumination_1.0=92.50% defocus_0.2=99.38% sensor_noise_0.4=97.81%
+adapter mode=illum_clean_guard epoch=7/8 loss=0.4861 mean_drift=96.56% clean=100.00% illumination_1.0=92.50% defocus_0.2=99.38% sensor_noise_0.4=97.81%
+adapter mode=illum_clean_guard epoch=8/8 loss=0.3861 mean_drift=96.56% clean=100.00% illumination_1.0=92.19% defocus_0.2=99.38% sensor_noise_0.4=98.12%
+正在加载 vit_small_patch16_224 预训练权重用于早期融合...
+adapter mode=illum_balanced_guard epoch=1/8 loss=1.9840 mean_drift=95.31% clean=100.00% illumination_1.0=92.81% defocus_0.2=97.19% sensor_noise_0.4=95.94%
+adapter mode=illum_balanced_guard epoch=2/8 loss=1.4189 mean_drift=96.25% clean=100.00% illumination_1.0=91.88% defocus_0.2=99.38% sensor_noise_0.4=97.50%
+adapter mode=illum_balanced_guard epoch=3/8 loss=0.8638 mean_drift=95.94% clean=100.00% illumination_1.0=91.88% defocus_0.2=98.44% sensor_noise_0.4=97.50%
+adapter mode=illum_balanced_guard epoch=4/8 loss=0.7652 mean_drift=96.46% clean=99.69% illumination_1.0=92.81% defocus_0.2=99.69% sensor_noise_0.4=96.88%
+adapter mode=illum_balanced_guard epoch=5/8 loss=0.5702 mean_drift=96.56% clean=100.00% illumination_1.0=93.12% defocus_0.2=99.38% sensor_noise_0.4=97.19%
+adapter mode=illum_balanced_guard epoch=6/8 loss=0.4869 mean_drift=96.46% clean=100.00% illumination_1.0=92.81% defocus_0.2=99.38% sensor_noise_0.4=97.19%
+adapter mode=illum_balanced_guard epoch=7/8 loss=0.4776 mean_drift=96.04% clean=100.00% illumination_1.0=91.56% defocus_0.2=98.44% sensor_noise_0.4=98.12%
+adapter mode=illum_balanced_guard epoch=8/8 loss=0.4052 mean_drift=96.98% clean=100.00% illumination_1.0=93.12% defocus_0.2=99.69% sensor_noise_0.4=98.12%
+正在加载 vit_small_patch16_224 预训练权重用于早期融合...
+adapter mode=illum_focus_guard epoch=1/10 loss=2.0312 mean_drift=94.58% clean=100.00% illumination_1.0=90.62% defocus_0.2=98.12% sensor_noise_0.4=95.00%
+adapter mode=illum_focus_guard epoch=2/10 loss=1.3306 mean_drift=95.94% clean=100.00% illumination_1.0=92.50% defocus_0.2=98.75% sensor_noise_0.4=96.56%
+adapter mode=illum_focus_guard epoch=3/10 loss=1.0594 mean_drift=96.25% clean=100.00% illumination_1.0=92.81% defocus_0.2=98.12% sensor_noise_0.4=97.81%
+adapter mode=illum_focus_guard epoch=4/10 loss=0.7827 mean_drift=96.04% clean=99.69% illumination_1.0=92.50% defocus_0.2=98.75% sensor_noise_0.4=96.88%
+adapter mode=illum_focus_guard epoch=5/10 loss=0.6383 mean_drift=95.31% clean=100.00% illumination_1.0=90.94% defocus_0.2=98.75% sensor_noise_0.4=96.25%
+adapter mode=illum_focus_guard epoch=6/10 loss=0.4592 mean_drift=96.67% clean=100.00% illumination_1.0=94.06% defocus_0.2=99.69% sensor_noise_0.4=96.25%
+adapter mode=illum_focus_guard epoch=7/10 loss=0.4337 mean_drift=96.15% clean=100.00% illumination_1.0=92.19% defocus_0.2=99.06% sensor_noise_0.4=97.19%
+adapter mode=illum_focus_guard epoch=8/10 loss=0.3692 mean_drift=97.08% clean=100.00% illumination_1.0=94.38% defocus_0.2=99.69% sensor_noise_0.4=97.19%
+adapter mode=illum_focus_guard epoch=9/10 loss=0.3837 mean_drift=96.88% clean=100.00% illumination_1.0=93.75% defocus_0.2=98.75% sensor_noise_0.4=98.12%
+adapter mode=illum_focus_guard epoch=10/10 loss=0.3570 mean_drift=97.08% clean=100.00% illumination_1.0=94.06% defocus_0.2=99.38% sensor_noise_0.4=97.81%
+正在加载 vit_small_patch16_224 预训练权重用于早期融合...
+正在加载 vit_small_patch16_224 预训练权重用于早期融合...
+{
+  "selection_boundary": "profiles selected on train-internal development only; official test evaluated after selection",
+  "profiles": {
+    "illum_clean_guard": {
+      "illumination_weight": 2.0,
+      "kd_weight": 1.0,
+      "feature_weight": 0.1,
+      "anchor_weight": 0.35,
+      "anchor_temperature": 1.0,
+      "epochs": 8
+    },
+    "illum_balanced_guard": {
+      "illumination_weight": 3.0,
+      "kd_weight": 1.0,
+      "feature_weight": 0.08,
+      "anchor_weight": 0.4,
+      "anchor_temperature": 1.0,
+      "epochs": 8
+    },
+    "illum_focus_guard": {
+      "illumination_weight": 4.0,
+      "kd_weight": 1.1,
+      "feature_weight": 0.05,
+      "anchor_weight": 0.4,
+      "anchor_temperature": 1.0,
+      "epochs": 10
+    }
+  },
+  "candidate_development": {
+    "illum_clean_guard": {
+      "epoch": 5,
+      "validation_accuracy": {
+        "clean": 1.0,
+        "illumination_1.0": 0.928125,
+        "defocus_0.2": 0.99375,
+        "sensor_noise_0.4": 0.978125
+      },
+      "profile": {
+        "illumination_weight": 2.0,
+        "kd_weight": 1.0,
+        "feature_weight": 0.1,
+        "anchor_weight": 0.35,
+        "anchor_temperature": 1.0,
+        "epochs": 8
+      },
+      "validation_mean_drift_accuracy": 0.9666666666666667,
+      "loss": 0.6467128686606884,
+      "ce_weight": 0.0,
+      "adapter_params": 299916
+    },
+    "illum_balanced_guard": {
+      "epoch": 8,
+      "validation_accuracy": {
+        "clean": 1.0,
+        "illumination_1.0": 0.93125,
+        "defocus_0.2": 0.996875,
+        "sensor_noise_0.4": 0.98125
+      },
+      "profile": {
+        "illumination_weight": 3.0,
+        "kd_weight": 1.0,
+        "feature_weight": 0.08,
+        "anchor_weight": 0.4,
+        "anchor_temperature": 1.0,
+        "epochs": 8
+      },
+      "validation_mean_drift_accuracy": 0.9697916666666666,
+      "loss": 0.4052018673469623,
+      "ce_weight": 0.0,
+      "adapter_params": 299916
+    },
+    "illum_focus_guard": {
+      "epoch": 8,
+      "validation_accuracy": {
+        "clean": 1.0,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.996875,
+        "sensor_noise_0.4": 0.971875
+      },
+      "profile": {
+        "illumination_weight": 4.0,
+        "kd_weight": 1.1,
+        "feature_weight": 0.05,
+        "anchor_weight": 0.4,
+        "anchor_temperature": 1.0,
+        "epochs": 10
+      },
+      "validation_mean_drift_accuracy": 0.9708333333333333,
+      "loss": 0.36923894497255483,
+      "ce_weight": 0.0,
+      "adapter_params": 299916
+    }
+  },
+  "eligible_profiles": [
+    "illum_clean_guard",
+    "illum_balanced_guard",
+    "illum_focus_guard"
+  ],
+  "selected_profile": "illum_focus_guard",
+  "baseline_development": {
+    "clean": 1.0,
+    "illumination_1.0": 0.921875,
+    "defocus_0.2": 0.95,
+    "sensor_noise_0.4": 0.8875
+  },
+  "teacher_development": {
+    "clean": 0.965625,
+    "illumination_1.0": 0.959375,
+    "defocus_0.2": 0.9625,
+    "sensor_noise_0.4": 0.940625
+  },
+  "official_test": {
+    "edge_baseline": {
+      "clean": 0.9675850891410048,
+      "illumination_1.0": 0.8914100486223663,
+      "defocus_0.2": 0.8841166936790924,
+      "sensor_noise_0.4": 0.8440032414910859
+    },
+    "cloud_unlabeled_illumination_tuned": {
+      "clean": 0.9570502431118314,
+      "illumination_1.0": 0.9230145867098866,
+      "defocus_0.2": 0.9444894651539708,
+      "sensor_noise_0.4": 0.929902755267423
+    }
+  },
+  "delta_over_edge": {
+    "clean": -0.010534846029173428,
+    "illumination_1.0": 0.031604538087520284,
+    "defocus_0.2": 0.060372771474878406,
+    "sensor_noise_0.4": 0.0858995137763372
+  }
+}

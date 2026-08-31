@@ -1,13 +1,14 @@
 # data · 数据集目录（真实数据不进 Git）
 
-本目录只提交说明文件。数据集、解压文件、生成的索引和模型权重均由
-`.gitignore` 排除，禁止提交到仓库。
+本目录只提交说明文件和不超过几十 MB 的 `samples/` 冒烟小样本。完整数据集、
+解压文件和生成索引均由 `.gitignore` 排除，禁止提交到仓库。
 
 ## 两个应用场景
 
 ```text
 data/
 ├── README.md
+├── samples/                                  # 约 2 MB、可公开的四视图冒烟小样本
 ├── modelnet40v2png_ori4/                 # 场景 1：四视角 3D 物体分类
 └── BoxCars116k_kaggle/
     ├── BoxCars116k.zip                   # 原始压缩包，约 6.1 GB
@@ -21,6 +22,29 @@ data/
         ├── dataset.pkl
         └── INFO.txt
 ```
+
+## 场景 1：ModelNet40 四视图物体识别
+
+- 官方页面与下载入口：http://modelnet.cs.princeton.edu/
+- 原始数据集论文：https://arxiv.org/abs/1406.5670
+- 本项目使用的输入不是原始 mesh，而是从官方 ModelNet40 生成的每个物体四张 PNG 渲染图。
+
+下载并解压原始数据或取得同格式四视图导出后，先验证结构：
+
+```bash
+python scripts/prepare_modelnet40.py --source /path/to/modelnet40v2png_ori4
+```
+
+确认输出中有 40 个类别目录和 PNG 后，再执行显式复制：
+
+```bash
+python scripts/prepare_modelnet40.py \
+  --source /path/to/modelnet40v2png_ori4 --copy
+```
+
+目标目录固定为 `data/modelnet40v2png_ori4/`。每个物体保留四张同一 CAD 模型的
+渲染视图；训练/测试划分由源导出的 `train/`、`test/` 子目录保留。不要随机打散同一
+物体的四视图，也不要将 `data/samples/` 用作正式指标数据。
 
 推荐在仓库根目录使用以下相对路径：
 
@@ -70,6 +94,32 @@ label           # 品牌类别索引，默认 0–15
 - 视图选择：根据 `view_mask` 和调度动作关闭低价值或故障视图；
 - 场景漂移：在输入图像上模拟光照、雨雾、模糊、遮挡和设备故障；
 - 输出任务：品牌分类，后续再评估 `medium`（79 类）或 `hard`（107 类）车型任务。
+
+下载官方发布包后（项目入口见上方官方仓库），解压并验证：
+
+```bash
+python scripts/prepare_boxcars116k.py --source /path/to/BoxCars116k
+```
+
+该脚本检查 `images/`、`json_data/dataset.json` 和官方分类 split；确认无误后：
+
+```bash
+python scripts/prepare_boxcars116k.py --source /path/to/BoxCars116k --copy
+```
+
+会复制到 `data/BoxCars116k_kaggle/BoxCars116k/`。不要把 `_mask.png` 当作 RGB 输入，
+也不要以单张图像随机切分替代官方按摄像头隔离的 split。
+
+## 冒烟小样本
+
+`data/samples/` 随仓库提供，用于验证图像读取与四视图推理，不用于训练或正式精度。
+
+```bash
+python scripts/smoke_test.py
+```
+
+其中 ModelNet40 小样本有 6 条四视图轨迹，BoxCars116k 小样本有 12 条四视图轨迹与
+对应 manifest。它们均来自公开数据集的展示性子集，保留了来源与类别元数据。
 
 ## DataLoader
 

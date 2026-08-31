@@ -6,9 +6,9 @@
 
 > 本文是本数据集的结果文档；8/9 初始实验来自云端 `adjust` 分支
 > `local/results/modelnet40_cloud_teacher_full_test_20260809/`，8/12 clean-guard 复训结果
-> 固化在 `shared/local/results/modelnet40_cloud_teacher_clean_guard_20260812/`。方法要点与总体结论见
+> 固化在仓库内 `../artifacts/modelnet40/`。方法要点与总体结论见
 > [`实验结果总览_20260809.md`](实验结果总览_20260809.md)；完整方法设计归档于
-> `local/archive/status_docs_20260810/云端视觉教师Adapter方案_20260809.md`。
+> `../archive/README.md`。
 
 ## 场景定义
 
@@ -100,7 +100,7 @@ baseline 1.053 pp，能力保持曲线中如实展示。
 | illum_focus_guard（选中） | 4.0 | 1.1 | 0.05 | 0.40 | 10 | 97.083% |
 
 最终选中 `illum_focus_guard`，即下发物 `cloud_unlabeled_illumination_tuned`。完整选型记录
-见本地 `shared/local/results/modelnet40_cloud_teacher_clean_guard_20260812/illumination_tuned_summary.json`。
+见仓库内 `../artifacts/modelnet40/illumination_tuned_summary.json`。
 
 ## 最终权重与云端 artifact
 

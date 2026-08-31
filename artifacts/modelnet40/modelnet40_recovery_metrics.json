@@ -1,0 +1,83 @@
+{
+  "artifact": "ModelNet40 InternViT-6B cloud-teacher AdaptFormer full official-test results",
+  "artifact_version": "2026-08-12",
+  "official_test_tracks": 2468,
+  "teacher_protocol": "frozen InternViT-6B; new 40-class head; 9043 labelled offline-head tracks",
+  "refresh_protocol": "480 disjoint tracks; cloud_unlabeled losses do not use refresh labels",
+  "development_tracks": 320,
+  "conditions": [
+    {
+      "condition": "clean",
+      "samples": 2468,
+      "methods": {
+        "edge_baseline": {
+          "accuracy_pct": 96.759
+        },
+        "cloud_unlabeled_illumination_tuned": {
+          "accuracy_pct": 95.705,
+          "gain_over_edge_pp": -1.054,
+          "paired_bootstrap_95ci_gain_pp": [
+            -1.58,
+            -0.527
+          ]
+        }
+      }
+    },
+    {
+      "condition": "illumination_1.0",
+      "samples": 2468,
+      "methods": {
+        "edge_baseline": {
+          "accuracy_pct": 89.141
+        },
+        "cloud_unlabeled_illumination_tuned": {
+          "accuracy_pct": 92.301,
+          "gain_over_edge_pp": 3.16,
+          "paired_bootstrap_95ci_gain_pp": [
+            2.188,
+            4.133
+          ]
+        }
+      }
+    },
+    {
+      "condition": "defocus_0.2",
+      "samples": 2468,
+      "methods": {
+        "edge_baseline": {
+          "accuracy_pct": 88.412
+        },
+        "cloud_unlabeled_illumination_tuned": {
+          "accuracy_pct": 94.449,
+          "gain_over_edge_pp": 6.037,
+          "paired_bootstrap_95ci_gain_pp": [
+            4.984,
+            7.131
+          ]
+        }
+      }
+    },
+    {
+      "condition": "sensor_noise_0.4",
+      "samples": 2468,
+      "methods": {
+        "edge_baseline": {
+          "accuracy_pct": 84.4
+        },
+        "cloud_unlabeled_illumination_tuned": {
+          "accuracy_pct": 92.99,
+          "gain_over_edge_pp": 8.59,
+          "paired_bootstrap_95ci_gain_pp": [
+            7.293,
+            9.968
+          ]
+        }
+      }
+    }
+  ],
+  "mean_drift_accuracy_pct": {
+    "edge_baseline": 87.318,
+    "cloud_unlabeled_illumination_tuned": 93.247
+  },
+  "selection_note": "illumination profiles selected on train-internal development before their official-test evaluation"
+}

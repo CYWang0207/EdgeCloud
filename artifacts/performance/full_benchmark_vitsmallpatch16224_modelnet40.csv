@@ -1,0 +1,5 @@
+mode,keep_ratio,adapter,seq_len,median_ms,p95_ms,ttft_drop_pct,memory_gb,memory_inference_mb,memory_ok,accuracy,params_m,adapter_params,adapter_kb
+baseline,1.0,off,785,341.93,407.7,0.0,0.0819,0.0,True,N/A,22.0,299916,1171.5
+baseline,1.0,on,785,352.06,394.49,-3.0,0.0819,0.0,True,N/A,22.0,299916,1171.5
+hard_prune,0.1,off,81,39.27,46.61,88.5,0.0819,0.0,True,N/A,22.0,299916,1171.5
+hard_prune,0.1,on,81,43.72,48.86,87.2,0.0819,0.0,True,N/A,22.0,299916,1171.5

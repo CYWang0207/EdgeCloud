@@ -6,7 +6,7 @@
 > `local/results/boxcars_cloud_teacher_full_test_20260810/`，与交付包
 > `local/delivery/boxcars_recovery_metrics_20260810/` 同源。方法要点与总体结论见
 > [`实验结果总览_20260809.md`](实验结果总览_20260809.md)；完整方法设计归档于
-> `local/archive/status_docs_20260810/云端视觉教师Adapter方案_20260809.md`。
+> `../archive/README.md`。
 
 ## 场景定义
 
@@ -142,7 +142,7 @@ Edge / cloud-unlabeled 两组模型（跳过 6B teacher 推理），耗时约 7 
 
 ## VLM 消融（旧路线，负向消融）
 
-历史 Qwen3-VL 路线已归档为消融（`local/archive/vlm_conditioned_20260809/`），不进入当前 edge
+历史 Qwen3-VL 路线已归档为消融（`../archive/prompt_experiments/`），不进入当前 edge
 forward。BoxCars validation 同协议消融（2026-08-08）：
 
 | 方法 | Clean | Illumination | Motion blur | Sensor noise | Mean drift |
@@ -176,7 +176,7 @@ VLM cache 只在 illumination / blur 上增加约 0.15 / 0.31 pp，却使 noise 
 | **完整官方 test 证据（summary + 98,576 条 predictions）** | `local/results/boxcars_cloud_teacher_full_test_20260810/` |
 | 轻量交付（README + 可画图 JSON，能力保持曲线） | `local/delivery/boxcars_recovery_metrics_20260809/` |
 | 最终下发 Adapter | `models/boxcars_cloud_teacher_adapter_20260809/cloud_unlabeled/best.pth` |
-| 旧 VLM 消融归档 | `local/archive/vlm_conditioned_20260809/` |
+| 旧 VLM 消融归档 | `../archive/prompt_experiments/` |
 | 主要代码 | `module_edge_perception/`（`boxcars_dataset.py`、`train_boxcars.py`、`evaluate_boxcars.py`、`boxcars_camera_drift_dataset.py`、`export_boxcars_cloud_teacher_cache.py`、`train_boxcars_cloud_teacher_adapter.py`、`evaluate_boxcars_cloud_teacher_quick_test.py`） |
 
 数据集不在 Git 中重复分发；官方来源、目录结构和准备方法见 `data/README.md`。正式权重通过 GitHub Release 提供，版本与校验值见 `models/README.md`。

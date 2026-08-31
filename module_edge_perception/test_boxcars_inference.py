@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dataset-path",
-        default="/root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k",
+        default="data/BoxCars116k_kaggle/BoxCars116k",
     )
     parser.add_argument(
         "--split", choices=("train", "validation", "test"), default="test"

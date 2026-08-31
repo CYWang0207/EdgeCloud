@@ -1,0 +1,88 @@
+{
+  "artifact": "EdgeCloud multi-node arbitration and real-model network-loop full rerun",
+  "artifact_version": "2026-08-12",
+  "multi_node": {
+    "weighted": {
+      "official_test_samples": 12322,
+      "nodes": 4,
+      "views_per_node": 3,
+      "conflict_confidence_threshold": 0.7,
+      "conflicts": 500,
+      "conflict_rate": 0.040577828274630745,
+      "resolved_conflicts": 500,
+      "resolve_rate": 1.0,
+      "rollbacks": 661,
+      "csv": "multi_node_eval_weighted_full.csv"
+    },
+    "bayesian": {
+      "official_test_samples": 12322,
+      "nodes": 4,
+      "views_per_node": 3,
+      "conflict_confidence_threshold": 0.7,
+      "conflicts": 500,
+      "conflict_rate": 0.040577828274630745,
+      "resolved_conflicts": 500,
+      "resolve_rate": 1.0,
+      "rollbacks": 729,
+      "csv": "multi_node_eval_bayesian_full.csv"
+    }
+  },
+  "real_model_loop": {
+    "static": {
+      "slots": 2468,
+      "business_availability_pct": 90.28,
+      "e2e_pass_rate_pct": 100.0,
+      "avg_e2e_ms": 80.0,
+      "p95_e2e_ms": 80.0,
+      "disconnect_rate_pct": 0.0,
+      "real_model_policy_accuracy_pct": 91.5316,
+      "trajectory_baseline_accuracy_pct": 96.7585,
+      "u0_slots": 1638,
+      "u1_slots": 830,
+      "u2_slots": 0,
+      "csv": "real_loop/full_real_model_clean_guard_static.csv"
+    },
+    "jitter": {
+      "slots": 2468,
+      "business_availability_pct": 90.28,
+      "e2e_pass_rate_pct": 100.0,
+      "avg_e2e_ms": 80.0,
+      "p95_e2e_ms": 80.0,
+      "disconnect_rate_pct": 0.0,
+      "real_model_policy_accuracy_pct": 91.5316,
+      "trajectory_baseline_accuracy_pct": 96.7585,
+      "u0_slots": 1638,
+      "u1_slots": 830,
+      "u2_slots": 0,
+      "csv": "real_loop/full_real_model_clean_guard_jitter.csv"
+    },
+    "jitter_outage": {
+      "slots": 2468,
+      "business_availability_pct": 90.28,
+      "e2e_pass_rate_pct": 100.0,
+      "avg_e2e_ms": 80.0,
+      "p95_e2e_ms": 80.0,
+      "disconnect_rate_pct": 0.0,
+      "real_model_policy_accuracy_pct": 91.5316,
+      "trajectory_baseline_accuracy_pct": 96.7585,
+      "u0_slots": 1638,
+      "u1_slots": 830,
+      "u2_slots": 0,
+      "csv": "real_loop/full_real_model_clean_guard_jitter_outage.csv"
+    },
+    "markov": {
+      "slots": 2468,
+      "business_availability_pct": 90.32,
+      "e2e_pass_rate_pct": 100.0,
+      "avg_e2e_ms": 80.0,
+      "p95_e2e_ms": 80.0,
+      "disconnect_rate_pct": 6.12,
+      "real_model_policy_accuracy_pct": 91.6126,
+      "trajectory_baseline_accuracy_pct": 96.7585,
+      "u0_slots": 1667,
+      "u1_slots": 801,
+      "u2_slots": 0,
+      "csv": "real_loop/full_real_model_clean_guard_markov.csv"
+    }
+  }
+}

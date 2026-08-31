@@ -26,7 +26,7 @@ module_scheduling/
 ├── EdgeCloud_RL/
 │   ├── main_edge_cloud_new.py          # 当前单节点调度主循环
 │   ├── main_edge_cloud_real_model.py   # 接入真实模型轨迹的全链路评测
-│   ├── main_edge_cloud.py              # 历史接口版本，仅用于结果追溯
+│   ├── ../../archive/scheduling/main_edge_cloud.py # 历史接口版本，仅用于结果追溯
 │   ├── actor_memory.py
 │   ├── critic_water_filling.py
 │   ├── network_sim.py

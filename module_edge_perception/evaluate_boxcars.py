@@ -19,7 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate BoxCars116k MV-ViT")
     parser.add_argument(
         "--dataset-path",
-        default="/root/autodl-tmp/EdgeCloud/data/BoxCars116k_kaggle/BoxCars116k",
+        default="data/BoxCars116k_kaggle/BoxCars116k",
     )
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--task", choices=VALID_TASKS, default="make")

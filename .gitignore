@@ -69,6 +69,8 @@ ENV/
 # ============ 大文件红线：数据集与权重目录（只保留 README） ============
 data/*
 !data/README.md
+!data/samples/
+!data/samples/**
 models/*
 !models/README.md
 
@@ -103,3 +105,8 @@ logs/
 .env
 .env.local
 local/
+
+# ============ 可公开复现的轻量材料 ============
+# 正式数据集与模型仍由上面的规则排除；以下小样本和证据包是提交物的一部分。
+!artifacts/
+!artifacts/**

@@ -1,0 +1,106 @@
+{
+  "artifact": "BoxCars116k cloud-teacher Adapter recovery metrics for capability-retention plots",
+  "artifact_version": "2026-08-10",
+  "unit": "top1_accuracy_percent",
+  "field_definitions": {
+    "clean_reference_pct": "Unadapted Edge MV-ViT-S accuracy on clean samples from the same protocol; pre-drift reference.",
+    "baseline_drift_pct": "Unadapted Edge MV-ViT-S accuracy after the stated degradation.",
+    "adapter_recovered_pct": "Edge MV-ViT-S with fixed cloud-unlabeled AdaptFormer under the stated degradation.",
+    "recovery_gain_pp": "adapter_recovered_pct minus baseline_drift_pct, in percentage points.",
+    "retention_vs_clean_pct": "Accuracy divided by clean_reference_pct times 100; recommended for the capability-retention y-axis."
+  },
+  "scope": {
+    "included_scene": "BoxCars116k vehicle make recognition (16 classes)",
+    "not_included_scene": "ModelNet40",
+    "not_included_reason": "This package is BoxCars-only. ModelNet40 has its own delivery package (modelnet40_recovery_metrics_20260809/)."
+  },
+  "recommended_for_jiehang_plot": {
+    "dataset_key": "boxcars_official_test_full_12322",
+    "why": "Complete official test (12,322 tracks) paired evaluation; checkpoints were fixed before this evaluation and every drift CI excludes zero.",
+    "x_axis": "condition_order",
+    "y_axis": "baseline_retention_vs_clean_pct and adapter_retention_vs_clean_pct",
+    "footnote": "Full official make/test split (12,322 tracks) x 4 conditions x 2 models (Edge baseline, cloud-unlabeled Adapter); teacher omitted to keep the run about 7 minutes."
+  },
+  "datasets": [
+    {
+      "dataset_key": "boxcars_official_test_full_12322",
+      "scene": "BoxCars116k",
+      "split": "official make/test",
+      "protocol_status": "full official test",
+      "samples": 12322,
+      "full_split_samples": 12322,
+      "selection": "All 12,322 official-test tracks.",
+      "selection_boundary": "No checkpoint, head, epoch, or loss weight was chosen from this test result.",
+      "models": {
+        "clean_reference_and_baseline": "Edge MV-ViT-S, Adapter disabled",
+        "adapter": "Edge MV-ViT-S with fixed cloud-unlabeled AdaptFormer; cloud training used InternViT-6B task logits, visual features and clean anchor, without uploaded-sample labels"
+      },
+      "conditions": [
+        {
+          "condition_order": 0,
+          "degradation": "clean",
+          "severity": 0.0,
+          "clean_reference_pct": 88.04,
+          "baseline_drift_pct": 88.04,
+          "adapter_recovered_pct": 88.09,
+          "recovery_gain_pp": 0.06,
+          "baseline_retention_vs_clean_pct": 100.0,
+          "adapter_retention_vs_clean_pct": 100.06,
+          "paired_bootstrap_95ci_gain_pp": [-0.2, 0.31]
+        },
+        {
+          "condition_order": 1,
+          "degradation": "illumination",
+          "severity": 1.0,
+          "clean_reference_pct": 88.04,
+          "baseline_drift_pct": 74.03,
+          "adapter_recovered_pct": 78.45,
+          "recovery_gain_pp": 4.42,
+          "baseline_retention_vs_clean_pct": 84.09,
+          "adapter_retention_vs_clean_pct": 89.11,
+          "paired_bootstrap_95ci_gain_pp": [3.95, 4.9]
+        },
+        {
+          "condition_order": 2,
+          "degradation": "motion_blur",
+          "severity": 0.8,
+          "clean_reference_pct": 88.04,
+          "baseline_drift_pct": 77.57,
+          "adapter_recovered_pct": 79.51,
+          "recovery_gain_pp": 1.94,
+          "baseline_retention_vs_clean_pct": 88.11,
+          "adapter_retention_vs_clean_pct": 90.31,
+          "paired_bootstrap_95ci_gain_pp": [1.57, 2.31]
+        },
+        {
+          "condition_order": 3,
+          "degradation": "sensor_noise",
+          "severity": 0.6,
+          "clean_reference_pct": 88.04,
+          "baseline_drift_pct": 71.77,
+          "adapter_recovered_pct": 79.1,
+          "recovery_gain_pp": 7.33,
+          "baseline_retention_vs_clean_pct": 81.53,
+          "adapter_retention_vs_clean_pct": 89.85,
+          "paired_bootstrap_95ci_gain_pp": [6.77, 7.9]
+        }
+      ],
+      "mean_drift": {
+        "baseline_drift_pct": 74.46,
+        "adapter_recovered_pct": 79.02,
+        "recovery_gain_pp": 4.56,
+        "baseline_retention_vs_clean_pct": 84.57,
+        "adapter_retention_vs_clean_pct": 89.76
+      },
+      "source_files": [
+        "../../local/results/boxcars_cloud_teacher_full_test_20260810/summary.json",
+        "../../local/results/boxcars_cloud_teacher_full_test_20260810/predictions.jsonl"
+      ]
+    }
+  ],
+  "interpretation": {
+    "meaning": "The Adapter restores the frozen Edge model after camera drift. It does not run the 6B teacher at the edge. Positive recovery_gain_pp means recovery relative to the unadapted Edge baseline under the same degradation.",
+    "main_observation": "Full official test (12,322 tracks): sensor-noise recovery +7.33 pp, illumination +4.42 pp, motion-blur +1.94 pp, mean drift +4.56 pp; all paired-bootstrap 95% CIs exclude zero. Clean is essentially flat (+0.06 pp, CI [-0.20, +0.31]).",
+    "do_not_claim": "Do not merge the development validation curve into this official-test curve. All numbers here come from the same 12,322-track official test with checkpoints fixed in advance."
+  }
+}

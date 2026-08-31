@@ -1,0 +1,132 @@
+{
+  "selection_boundary": "profiles selected on train-internal development only; official test evaluated after selection",
+  "profiles": {
+    "illum_clean_guard": {
+      "illumination_weight": 2.0,
+      "kd_weight": 1.0,
+      "feature_weight": 0.1,
+      "anchor_weight": 0.35,
+      "anchor_temperature": 1.0,
+      "epochs": 8
+    },
+    "illum_balanced_guard": {
+      "illumination_weight": 3.0,
+      "kd_weight": 1.0,
+      "feature_weight": 0.08,
+      "anchor_weight": 0.4,
+      "anchor_temperature": 1.0,
+      "epochs": 8
+    },
+    "illum_focus_guard": {
+      "illumination_weight": 4.0,
+      "kd_weight": 1.1,
+      "feature_weight": 0.05,
+      "anchor_weight": 0.4,
+      "anchor_temperature": 1.0,
+      "epochs": 10
+    }
+  },
+  "candidate_development": {
+    "illum_clean_guard": {
+      "epoch": 5,
+      "validation_accuracy": {
+        "clean": 1.0,
+        "illumination_1.0": 0.928125,
+        "defocus_0.2": 0.99375,
+        "sensor_noise_0.4": 0.978125
+      },
+      "profile": {
+        "illumination_weight": 2.0,
+        "kd_weight": 1.0,
+        "feature_weight": 0.1,
+        "anchor_weight": 0.35,
+        "anchor_temperature": 1.0,
+        "epochs": 8
+      },
+      "validation_mean_drift_accuracy": 0.9666666666666667,
+      "loss": 0.6467128686606884,
+      "ce_weight": 0.0,
+      "adapter_params": 299916
+    },
+    "illum_balanced_guard": {
+      "epoch": 8,
+      "validation_accuracy": {
+        "clean": 1.0,
+        "illumination_1.0": 0.93125,
+        "defocus_0.2": 0.996875,
+        "sensor_noise_0.4": 0.98125
+      },
+      "profile": {
+        "illumination_weight": 3.0,
+        "kd_weight": 1.0,
+        "feature_weight": 0.08,
+        "anchor_weight": 0.4,
+        "anchor_temperature": 1.0,
+        "epochs": 8
+      },
+      "validation_mean_drift_accuracy": 0.9697916666666666,
+      "loss": 0.4052018673469623,
+      "ce_weight": 0.0,
+      "adapter_params": 299916
+    },
+    "illum_focus_guard": {
+      "epoch": 8,
+      "validation_accuracy": {
+        "clean": 1.0,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.996875,
+        "sensor_noise_0.4": 0.971875
+      },
+      "profile": {
+        "illumination_weight": 4.0,
+        "kd_weight": 1.1,
+        "feature_weight": 0.05,
+        "anchor_weight": 0.4,
+        "anchor_temperature": 1.0,
+        "epochs": 10
+      },
+      "validation_mean_drift_accuracy": 0.9708333333333333,
+      "loss": 0.36923894497255483,
+      "ce_weight": 0.0,
+      "adapter_params": 299916
+    }
+  },
+  "eligible_profiles": [
+    "illum_clean_guard",
+    "illum_balanced_guard",
+    "illum_focus_guard"
+  ],
+  "selected_profile": "illum_focus_guard",
+  "baseline_development": {
+    "clean": 1.0,
+    "illumination_1.0": 0.921875,
+    "defocus_0.2": 0.95,
+    "sensor_noise_0.4": 0.8875
+  },
+  "teacher_development": {
+    "clean": 0.965625,
+    "illumination_1.0": 0.959375,
+    "defocus_0.2": 0.9625,
+    "sensor_noise_0.4": 0.940625
+  },
+  "official_test": {
+    "edge_baseline": {
+      "clean": 0.9675850891410048,
+      "illumination_1.0": 0.8914100486223663,
+      "defocus_0.2": 0.8841166936790924,
+      "sensor_noise_0.4": 0.8440032414910859
+    },
+    "cloud_unlabeled_illumination_tuned": {
+      "clean": 0.9570502431118314,
+      "illumination_1.0": 0.9230145867098866,
+      "defocus_0.2": 0.9444894651539708,
+      "sensor_noise_0.4": 0.929902755267423
+    }
+  },
+  "delta_over_edge": {
+    "clean": -0.010534846029173428,
+    "illumination_1.0": 0.031604538087520284,
+    "defocus_0.2": 0.060372771474878406,
+    "sensor_noise_0.4": 0.0858995137763372
+  }
+}

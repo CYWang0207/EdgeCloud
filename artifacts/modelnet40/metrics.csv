@@ -1,0 +1,6 @@
+condition,samples,baseline_accuracy_pct,adapter_accuracy_pct,gain_pp,ci_low_pp,ci_high_pp
+clean,2468,96.759,95.705,-1.054,-1.580,-0.527
+illumination_1.0,2468,89.141,92.301,3.160,2.188,4.133
+defocus_0.2,2468,88.412,94.449,6.037,4.984,7.131
+sensor_noise_0.4,2468,84.400,92.990,8.590,7.293,9.968
+mean_drift,2468,87.318,93.247,5.929,,

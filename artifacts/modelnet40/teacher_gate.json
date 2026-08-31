@@ -1,0 +1,19 @@
+{
+  "baseline_development": {
+    "clean": 1.0,
+    "illumination_1.0": 0.921875,
+    "defocus_0.2": 0.95,
+    "sensor_noise_0.4": 0.8875
+  },
+  "teacher_development": {
+    "clean": 0.965625,
+    "illumination_1.0": 0.959375,
+    "defocus_0.2": 0.9625,
+    "sensor_noise_0.4": 0.940625
+  },
+  "baseline_mean_drift": 0.9197916666666667,
+  "teacher_mean_drift": 0.9541666666666666,
+  "teacher_gain_over_edge": 0.03437499999999993,
+  "minimum_required_gain": 0.0,
+  "passed": true
+}

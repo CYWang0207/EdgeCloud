@@ -1,0 +1,811 @@
+{
+  "best_mean_drift": 0.9541666666666666,
+  "history": [
+    {
+      "epoch": 1,
+      "accuracy": {
+        "clean": 0.63125,
+        "illumination_1.0": 0.55625,
+        "defocus_0.2": 0.628125,
+        "sensor_noise_0.4": 0.44375
+      },
+      "mean_drift": 0.5427083333333333
+    },
+    {
+      "epoch": 2,
+      "accuracy": {
+        "clean": 0.8125,
+        "illumination_1.0": 0.7375,
+        "defocus_0.2": 0.809375,
+        "sensor_noise_0.4": 0.66875
+      },
+      "mean_drift": 0.7385416666666668
+    },
+    {
+      "epoch": 3,
+      "accuracy": {
+        "clean": 0.88125,
+        "illumination_1.0": 0.803125,
+        "defocus_0.2": 0.88125,
+        "sensor_noise_0.4": 0.740625
+      },
+      "mean_drift": 0.8083333333333332
+    },
+    {
+      "epoch": 4,
+      "accuracy": {
+        "clean": 0.915625,
+        "illumination_1.0": 0.828125,
+        "defocus_0.2": 0.9,
+        "sensor_noise_0.4": 0.803125
+      },
+      "mean_drift": 0.84375
+    },
+    {
+      "epoch": 5,
+      "accuracy": {
+        "clean": 0.915625,
+        "illumination_1.0": 0.8875,
+        "defocus_0.2": 0.909375,
+        "sensor_noise_0.4": 0.85
+      },
+      "mean_drift": 0.8822916666666667
+    },
+    {
+      "epoch": 6,
+      "accuracy": {
+        "clean": 0.934375,
+        "illumination_1.0": 0.8875,
+        "defocus_0.2": 0.9375,
+        "sensor_noise_0.4": 0.84375
+      },
+      "mean_drift": 0.8895833333333334
+    },
+    {
+      "epoch": 7,
+      "accuracy": {
+        "clean": 0.925,
+        "illumination_1.0": 0.9,
+        "defocus_0.2": 0.934375,
+        "sensor_noise_0.4": 0.85
+      },
+      "mean_drift": 0.8947916666666668
+    },
+    {
+      "epoch": 8,
+      "accuracy": {
+        "clean": 0.940625,
+        "illumination_1.0": 0.9,
+        "defocus_0.2": 0.940625,
+        "sensor_noise_0.4": 0.86875
+      },
+      "mean_drift": 0.9031250000000001
+    },
+    {
+      "epoch": 9,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.921875,
+        "defocus_0.2": 0.953125,
+        "sensor_noise_0.4": 0.9
+      },
+      "mean_drift": 0.9249999999999999
+    },
+    {
+      "epoch": 10,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.9125,
+        "defocus_0.2": 0.953125,
+        "sensor_noise_0.4": 0.89375
+      },
+      "mean_drift": 0.9197916666666667
+    },
+    {
+      "epoch": 11,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.925,
+        "defocus_0.2": 0.95,
+        "sensor_noise_0.4": 0.9
+      },
+      "mean_drift": 0.9249999999999999
+    },
+    {
+      "epoch": 12,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.934375,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.915625
+      },
+      "mean_drift": 0.9385416666666666
+    },
+    {
+      "epoch": 13,
+      "accuracy": {
+        "clean": 0.95,
+        "illumination_1.0": 0.925,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.9
+      },
+      "mean_drift": 0.928125
+    },
+    {
+      "epoch": 14,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.928125,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.90625
+      },
+      "mean_drift": 0.9322916666666666
+    },
+    {
+      "epoch": 15,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.928125,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.90625
+      },
+      "mean_drift": 0.93125
+    },
+    {
+      "epoch": 16,
+      "accuracy": {
+        "clean": 0.94375,
+        "illumination_1.0": 0.921875,
+        "defocus_0.2": 0.946875,
+        "sensor_noise_0.4": 0.903125
+      },
+      "mean_drift": 0.9239583333333333
+    },
+    {
+      "epoch": 17,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.928125,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.90625
+      },
+      "mean_drift": 0.9322916666666666
+    },
+    {
+      "epoch": 18,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.915625
+      },
+      "mean_drift": 0.9375
+    },
+    {
+      "epoch": 19,
+      "accuracy": {
+        "clean": 0.96875,
+        "illumination_1.0": 0.93125,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.928125
+      },
+      "mean_drift": 0.9406249999999999
+    },
+    {
+      "epoch": 20,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.925
+      },
+      "mean_drift": 0.9447916666666667
+    },
+    {
+      "epoch": 21,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.934375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.8875
+      },
+      "mean_drift": 0.9270833333333334
+    },
+    {
+      "epoch": 22,
+      "accuracy": {
+        "clean": 0.95,
+        "illumination_1.0": 0.91875,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.903125
+      },
+      "mean_drift": 0.9270833333333334
+    },
+    {
+      "epoch": 23,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.921875
+      },
+      "mean_drift": 0.9416666666666668
+    },
+    {
+      "epoch": 24,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9479166666666666
+    },
+    {
+      "epoch": 25,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.96875,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9500000000000001
+    },
+    {
+      "epoch": 26,
+      "accuracy": {
+        "clean": 0.95,
+        "illumination_1.0": 0.925,
+        "defocus_0.2": 0.95,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.9291666666666667
+    },
+    {
+      "epoch": 27,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.934375
+      },
+      "mean_drift": 0.9489583333333332
+    },
+    {
+      "epoch": 28,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.934375,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.921875
+      },
+      "mean_drift": 0.9395833333333333
+    },
+    {
+      "epoch": 29,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.940625,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.921875
+      },
+      "mean_drift": 0.9395833333333333
+    },
+    {
+      "epoch": 30,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9427083333333334
+    },
+    {
+      "epoch": 31,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.93125,
+        "defocus_0.2": 0.95,
+        "sensor_noise_0.4": 0.91875
+      },
+      "mean_drift": 0.9333333333333332
+    },
+    {
+      "epoch": 32,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.940625,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.90625
+      },
+      "mean_drift": 0.9343750000000001
+    },
+    {
+      "epoch": 33,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9479166666666666
+    },
+    {
+      "epoch": 34,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.928125
+      },
+      "mean_drift": 0.9447916666666667
+    },
+    {
+      "epoch": 35,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.928125,
+        "defocus_0.2": 0.946875,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.9291666666666667
+    },
+    {
+      "epoch": 36,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.921875
+      },
+      "mean_drift": 0.9427083333333334
+    },
+    {
+      "epoch": 37,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.925
+      },
+      "mean_drift": 0.9458333333333333
+    },
+    {
+      "epoch": 38,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.953125,
+        "sensor_noise_0.4": 0.903125
+      },
+      "mean_drift": 0.93125
+    },
+    {
+      "epoch": 39,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.9375
+      },
+      "mean_drift": 0.9489583333333332
+    },
+    {
+      "epoch": 40,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.921875
+      },
+      "mean_drift": 0.94375
+    },
+    {
+      "epoch": 41,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9458333333333333
+    },
+    {
+      "epoch": 42,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.95625,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.9375
+      },
+      "mean_drift": 0.953125
+    },
+    {
+      "epoch": 43,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.953125,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.9375
+      },
+      "mean_drift": 0.9500000000000001
+    },
+    {
+      "epoch": 44,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.95625,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.928125
+      },
+      "mean_drift": 0.946875
+    },
+    {
+      "epoch": 45,
+      "accuracy": {
+        "clean": 0.946875,
+        "illumination_1.0": 0.93125,
+        "defocus_0.2": 0.95,
+        "sensor_noise_0.4": 0.928125
+      },
+      "mean_drift": 0.9364583333333334
+    },
+    {
+      "epoch": 46,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.915625
+      },
+      "mean_drift": 0.9406249999999999
+    },
+    {
+      "epoch": 47,
+      "accuracy": {
+        "clean": 0.96875,
+        "illumination_1.0": 0.953125,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.94375
+    },
+    {
+      "epoch": 48,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.940625,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.91875
+      },
+      "mean_drift": 0.9385416666666666
+    },
+    {
+      "epoch": 49,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.953125,
+        "sensor_noise_0.4": 0.90625
+      },
+      "mean_drift": 0.9364583333333334
+    },
+    {
+      "epoch": 50,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.959375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.9375
+      },
+      "mean_drift": 0.9520833333333334
+    },
+    {
+      "epoch": 51,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.915625
+      },
+      "mean_drift": 0.9427083333333334
+    },
+    {
+      "epoch": 52,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.934375
+      },
+      "mean_drift": 0.9458333333333333
+    },
+    {
+      "epoch": 53,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9479166666666666
+    },
+    {
+      "epoch": 54,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.953125,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.909375
+      },
+      "mean_drift": 0.9395833333333333
+    },
+    {
+      "epoch": 55,
+      "accuracy": {
+        "clean": 0.946875,
+        "illumination_1.0": 0.93125,
+        "defocus_0.2": 0.953125,
+        "sensor_noise_0.4": 0.925
+      },
+      "mean_drift": 0.9364583333333334
+    },
+    {
+      "epoch": 56,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.93125,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.925
+      },
+      "mean_drift": 0.9406249999999999
+    },
+    {
+      "epoch": 57,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9447916666666667
+    },
+    {
+      "epoch": 58,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.94375
+    },
+    {
+      "epoch": 59,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.95625,
+        "defocus_0.2": 0.965625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9510416666666667
+    },
+    {
+      "epoch": 60,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.921875
+      },
+      "mean_drift": 0.9427083333333334
+    },
+    {
+      "epoch": 61,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.928125
+      },
+      "mean_drift": 0.9416666666666668
+    },
+    {
+      "epoch": 62,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.934375
+      },
+      "mean_drift": 0.946875
+    },
+    {
+      "epoch": 63,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.91875
+      },
+      "mean_drift": 0.9406249999999999
+    },
+    {
+      "epoch": 64,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.9625,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.9447916666666667
+    },
+    {
+      "epoch": 65,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.940625,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.91875
+      },
+      "mean_drift": 0.9385416666666666
+    },
+    {
+      "epoch": 66,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.9406249999999999
+    },
+    {
+      "epoch": 67,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.95625,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.940625
+      },
+      "mean_drift": 0.9520833333333334
+    },
+    {
+      "epoch": 68,
+      "accuracy": {
+        "clean": 0.95,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.95,
+        "sensor_noise_0.4": 0.925
+      },
+      "mean_drift": 0.9375
+    },
+    {
+      "epoch": 69,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.953125,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.928125
+      },
+      "mean_drift": 0.946875
+    },
+    {
+      "epoch": 70,
+      "accuracy": {
+        "clean": 0.953125,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9416666666666668
+    },
+    {
+      "epoch": 71,
+      "accuracy": {
+        "clean": 0.95,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.953125,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.9343750000000001
+    },
+    {
+      "epoch": 72,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.91875
+      },
+      "mean_drift": 0.9395833333333333
+    },
+    {
+      "epoch": 73,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.9385416666666666
+    },
+    {
+      "epoch": 74,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.95,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.9125
+      },
+      "mean_drift": 0.9416666666666668
+    },
+    {
+      "epoch": 75,
+      "accuracy": {
+        "clean": 0.971875,
+        "illumination_1.0": 0.94375,
+        "defocus_0.2": 0.953125,
+        "sensor_noise_0.4": 0.925
+      },
+      "mean_drift": 0.9406249999999999
+    },
+    {
+      "epoch": 76,
+      "accuracy": {
+        "clean": 0.9625,
+        "illumination_1.0": 0.946875,
+        "defocus_0.2": 0.96875,
+        "sensor_noise_0.4": 0.915625
+      },
+      "mean_drift": 0.94375
+    },
+    {
+      "epoch": 77,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.940625,
+        "defocus_0.2": 0.95625,
+        "sensor_noise_0.4": 0.91875
+      },
+      "mean_drift": 0.9385416666666666
+    },
+    {
+      "epoch": 78,
+      "accuracy": {
+        "clean": 0.959375,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.93125
+      },
+      "mean_drift": 0.9427083333333334
+    },
+    {
+      "epoch": 79,
+      "accuracy": {
+        "clean": 0.95625,
+        "illumination_1.0": 0.9375,
+        "defocus_0.2": 0.959375,
+        "sensor_noise_0.4": 0.915625
+      },
+      "mean_drift": 0.9375
+    },
+    {
+      "epoch": 80,
+      "accuracy": {
+        "clean": 0.965625,
+        "illumination_1.0": 0.959375,
+        "defocus_0.2": 0.9625,
+        "sensor_noise_0.4": 0.940625
+      },
+      "mean_drift": 0.9541666666666666
+    }
+  ],
+  "accuracy": {
+    "clean": 0.965625,
+    "illumination_1.0": 0.959375,
+    "defocus_0.2": 0.9625,
+    "sensor_noise_0.4": 0.940625
+  }
+}
